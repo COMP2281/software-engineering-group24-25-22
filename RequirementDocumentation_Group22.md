@@ -1,4 +1,4 @@
-# Requirement Documentaion 
+# Requirement Documentaion
 
 ## Intro
 
@@ -9,6 +9,8 @@
 ### System descriptions
 
 ## Solution Requirement
+
+    Bens Section hi
 
 ### Requirement Elicitation
 
@@ -21,4 +23,3 @@
 ### Development Approach
 
 ### Project Schedule
-
