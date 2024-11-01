@@ -1,6 +1,8 @@
 # Requirement Documentaion 
 
-## Intro
+## Introduction
+
+    Our client is Watertons
 
 ### Overview and Justification
 
@@ -21,4 +23,3 @@
 ### Development Approach
 
 ### Project Schedule
-
