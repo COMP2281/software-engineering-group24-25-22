@@ -28,7 +28,8 @@ For deadlines, assignments, and other project requirements, please refer to the 
 ### Prerequisites
 - pip install the `uwsgi` package inside your python development environment. I mean it's already in requirements.txt 
 so you can just `pip install -r requirements.txt.` Pip will handle the duplicates don't worry about it. Just run it blindly.
-- Install `nginx` in your system. You can do it!
+- Install `nginx` in your system. You can do it! Make sure to add it to your system's %PATH% or ($PATH for unix-like systems). So that your computer will know what it means when you do the command `nginx`. You don't need to do for `uwsgi` since it is already included once your inside your Python virtual environment.
+
 
 ### Running the General Server
 #### First run `uwsgi` to make a WSGI container blah blah for the Django codebase. You must be inside the environment when doing this. 
