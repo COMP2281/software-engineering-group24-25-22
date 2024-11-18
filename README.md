@@ -34,7 +34,7 @@ so you can just `pip install -r requirements.txt.` Pip will handle the duplicate
 ### Running the General Server
 #### First run `uwsgi` to make a WSGI container blah blah for the Django codebase. You must be inside the environment when doing this. 
 > `uwsgi --socket 127.0.0.1:29000 --chdir <path-to-project>/backend/general --wsgi-file general/wsgi.py --master --processes 10 --threads 2 --stats 127.0.0.1:9191`
-#### Then run `nginx` to make a server process
+#### Then run `nginx` to make a server process. Must be in a new terminal. WSGI is currently running on your first terminal, and you must not close that!
 > `nginx -c <path-to-project>/backend/general/server/general-nginx.conf -p <path-to-project>/backend/general/server`
 #### To reload the configuration file (if you changed anything)
 > `nginx -c <path-to-project>/backend/general/server/general-nginx.conf -p <path-to-project>/backend/general/server -s reload`
