@@ -1,7 +1,11 @@
-export default function App() {
+import React from 'react'
+
+import { Field } from './component/field.tsx'
+
+const App: React.FC = () => {
   return (
-    <h1 className="text-3xl font-bold underline bg-red-400">
-      LEAGUE OF LEGEND
-    </h1>
+    <Field />
   )
 }
+
+export default App;
