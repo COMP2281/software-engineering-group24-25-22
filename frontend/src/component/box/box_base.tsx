@@ -1,37 +1,28 @@
 import React from 'react'
-import Box from '@mui/material/Box';
+import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
-import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
-import { FixedSizeList, ListChildComponentProps } from 'react-window';
+import CommentIcon from '@mui/icons-material/Comment';
+import IconButton from '@mui/material/IconButton';
 
-function renderRow(props: ListChildComponentProps) {
-    const { index, style } = props;
-
-    return (
-        <ListItem style={style} key={index} component="div" disablePadding>
-            <ListItemButton>
-                <ListItemText primary={`Item ${index + 1}`} />
-            </ListItemButton>
-        </ListItem>
-    );
-}
 
 
 export function BoxBase() {
     return (
-        <Box
-            sx={{ width: '100%', height: 400, maxWidth: 360, bgcolor: 'background.paper' }}
+        <List sx={{ width: '100%', maxWidth: 360, bgcolor: 'background.paper' }}>
+      {[1, 2, 3].map((value) => (
+        <ListItem
+          key={value}
+          disableGutters
+          secondaryAction={
+            <IconButton aria-label="comment">
+              <CommentIcon />
+            </IconButton>
+          }
         >
-            <FixedSizeList
-                height={400}
-                width={360}
-                itemSize={46}
-                itemCount={200}
-                overscanCount={5}
-            >
-                {renderRow}
-            </FixedSizeList>
-        </Box>
+          <ListItemText primary={`Line item ${value}`} />
+        </ListItem>
+      ))}
+    </List>
     );
 }
