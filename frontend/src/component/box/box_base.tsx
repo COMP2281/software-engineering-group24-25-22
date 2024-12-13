@@ -1,5 +1,6 @@
 import React from 'react';
-import { FiEdit } from 'react-icons/fi'; // Replace EditIcon with a Tailwind-compatible icon
+import IconButton from '@mui/material/IconButton';
+import EditIcon from '@mui/icons-material/Edit';
 
 export function BoxBase() {
     const itemName = ['receipt1', 'receipt2'];
@@ -14,12 +15,9 @@ export function BoxBase() {
                     <div className="text-black text-xl">
                         {value}
                     </div>
-                    <button
-                        aria-label="edit"
-                        className="p-2 bg-transparent hover:bg-gray-700 rounded-full"
-                    >
-                        <FiEdit className="text-black text-xl" />
-                    </button>
+                    <IconButton aria-label="comment">
+                        <EditIcon />
+                    </IconButton>
                 </div>
             ))}
         </div>
