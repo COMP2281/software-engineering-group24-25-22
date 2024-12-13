@@ -1,10 +1,11 @@
 import React from 'react'
 
-import { Field } from './component/field.tsx'
+import { BoxBase } from './component/box/box_base.tsx'
 
 const App: React.FC = () => {
   return (
-    <Field />
+    <div> hi 
+    </div>
   )
 }
 
