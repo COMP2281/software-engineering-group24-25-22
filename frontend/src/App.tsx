@@ -4,7 +4,7 @@ import { Field } from './component/field.tsx'
 
 const App: React.FC = () => {
   return (
-    <Field />
+    <div className='bg-black h-screen w-screen'></div>
   )
 }
 
