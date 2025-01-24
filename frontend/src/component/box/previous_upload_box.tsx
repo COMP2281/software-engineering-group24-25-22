@@ -28,7 +28,7 @@ export function PreviosUploadBox() {
     return (
             <div className="bg-gray-300 w-fill">
                 <div className="font-bold p-4 bg-opacity-30 text-2xl">
-                    Pending Uploads
+                    Previous Upload
                 </div>
                 <div className=" max-h-[50vh] overflow-y-auto rounded">
                     <BoxBase items={pendingItems} showEditButton={false} />
