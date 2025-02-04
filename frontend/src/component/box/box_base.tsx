@@ -3,8 +3,8 @@ import IconButton from '@mui/material/IconButton';
 import EditIcon from '@mui/icons-material/Edit';
 
 interface BoxBaseProps {
-    items: { title: string; description: string }[];
-    showEditButton?: boolean;
+    items: { title: string; description: string }[]
+    showEditButton?: boolean
 }
 
 export function BoxBase({ items, showEditButton}: BoxBaseProps) {    
