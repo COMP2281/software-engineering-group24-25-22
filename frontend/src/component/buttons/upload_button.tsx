@@ -23,7 +23,7 @@ export function UploadButton() {
             tabIndex={-1}
             startIcon={<CloudUploadIcon />}
         >
-            Scan Files
+            Upload Files
             <VisuallyHiddenInput
                 type="file"
                 onChange={(event: React.ChangeEvent<HTMLInputElement>) => console.log(event.target.files)}
