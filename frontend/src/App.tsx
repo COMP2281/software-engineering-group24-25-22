@@ -1,11 +1,13 @@
 import React from 'react'
 
-import { Field } from './component/field.tsx'
+import { UploadConfiguration } from './pages/upload_configuration'
 
 const App: React.FC = () => {
   return (
-    <div className='bg-black h-screen w-screen'></div>
-  )
-}
+    <div className='h-full'>
+      <UploadConfiguration />
+    </div>
+  );
+};
 
 export default App;
