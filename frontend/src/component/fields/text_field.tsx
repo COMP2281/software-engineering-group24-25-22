@@ -1,16 +1,19 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 
 import TextField from '@mui/material/TextField';
 
 interface fieldBaseProps {
-    label: string,
-    itemID: number
+    itemID: string
 }
 
-export function Field({label, itemID}: fieldBaseProps) {
+export function InputTextField({itemID}: fieldBaseProps) {
     const [value, setValue] = useState('')
     const [error, setError] = useState(false)
     const [rows, setRows] = useState(3)
+
+    useEffect(() => {
+        setError(value.trim() === '');
+    }, [value]);
 
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const inputValue = event.target.value;
@@ -22,11 +25,10 @@ export function Field({label, itemID}: fieldBaseProps) {
     }
 
     return (
-        <div className='h-fill w-fill'> 
-            <TextField
+        <div className='h-fill '> 
+            <TextField className='w-full'
                 error={error}
                 id={`text-field-${itemID}`}
-                label={label}
                 value={value}
                 helperText={error ? "Cannot be Empty" : ""}
                 onChange={handleChange}

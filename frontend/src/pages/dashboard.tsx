@@ -1,12 +1,13 @@
 import React from 'react'
 
-import { Field } from '../component/fields/text_field'
+import { FieldTable } from '../component/fields/field_table'
 
 export function DashBoard() {
     return (
         <div> 
+            <FieldTable/>
             Testing
-            <Field />
+            
         </div>
     );
 }
