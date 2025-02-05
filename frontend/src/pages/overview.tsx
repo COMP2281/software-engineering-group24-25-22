@@ -4,7 +4,7 @@ import { PendingUploadBox } from '../component/box/pending_upload_box.tsx';
 import { PreviosUploadBox } from '../component/box/previous_upload_box.tsx';
 import { ImageUpload } from '../component/image_upload.tsx'
 
-export function UploadConfiguration() {
+export function Overview() {
     return (
         <div className="flex flex-col lg:flex-row lg:h-screen justify-center items-center p-8">
             <div className="lg:w-1/2 w-full flex justify-center items-center py-4 h-full">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-import { UploadConfiguration } from './pages/upload_configuration';
+import { Overview } from './pages/overview';
 import { DashBoard } from './pages/dashboard'
 import { Header } from './component/header';
 
@@ -21,11 +21,11 @@ const App: React.FC = () => {
   const renderPage = () => {
     switch (hash){
       case "#upload":
-        return <UploadConfiguration />
+        return <Overview />
       case "#dashboard":
         return <DashBoard />
       default:
-        return <UploadConfiguration />
+        return <Overview />
     }
   }
 
