@@ -16,15 +16,15 @@ export function ImageField({ image, progress }: BoxBaseProps) {
     return (
         <div className="w-full h-full">
             <div className="flex flex-col ">
-                <div className="w-full flex flex-col justify-center items-center ">
+                <div className="w-full flex flex-col justify-center items-center">
                     {imagePath ? (
                         <img
                         src={imagePath}
                         alt="Item"
-                        className="max-h-[700px] max-w-[600px] w-auto h-auto object-contain"
+                        className="max-h-[700px] max-w-[600px] w-auto h-auto object-contain pb-4"
                         />
                     ) : (
-                        <ImageIcon style={{ fontSize: '500px' }} />
+                        <ImageIcon style={{ fontSize: '500px' }} className='pb-4' />
                     )}
                     <LinearProgress variant="determinate" value={progress} className="w-full mt-2" />
                 </div>

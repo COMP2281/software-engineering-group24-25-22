@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Overview } from './pages/overview';
 import { DashBoard } from './pages/dashboard'
 import { Header } from './component/header';
+import { Login } from "./pages/login";
 
 const App: React.FC = () => {
   const [hash, setHash] = useState(window.location.hash)
@@ -24,6 +25,8 @@ const App: React.FC = () => {
         return <Overview />
       case "#dashboard":
         return <DashBoard />
+      case "#login":
+        return <Login />
       default:
         return <Overview />
     }
