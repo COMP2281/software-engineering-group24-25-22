@@ -11,9 +11,9 @@ export function DashBoard() {
     const progress = (filledFields / totalFields) * 100;
 
     return (
-        <div className="flex flex-col lg:flex-row lg:h-screen justify-center items-center w-full">
-            <div className='lg:w-1/3 w-full p-4'>
-                <ImageField image={""} progress={progress} />
+        <div className="flex flex-col lg:flex-row lg:h-screen  w-full ">
+            <div className='lg:w-1/3 w-full p-4 h-full '>
+                <ImageField image={"receipt1.png"} progress={progress} />
             </div>
             <div className='lg:w-2/3 w-full p-4'>
                 <FieldTable setFieldValues={setFieldValues} />

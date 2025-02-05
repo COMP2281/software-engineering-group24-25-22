@@ -30,11 +30,11 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-fill flex flex-col">
         <Header />
         
       
-      <div className="h-[70%] ">
+      <div className="">
         {renderPage()}
       </div>
     </div>

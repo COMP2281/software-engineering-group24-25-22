@@ -7,7 +7,6 @@ export function LocationButton() {
         <div> 
             <Button 
                 variant="contained" 
-                sx={{ backgroundColor: 'black', color: 'white', '&:hover': { backgroundColor: '#333' } }}
             >
                 <FmdGoodIcon/>
                 Get Location

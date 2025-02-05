@@ -11,20 +11,20 @@ interface BoxBaseProps {
 }
 
 export function ImageField({ image, progress }: BoxBaseProps) {
-    const imagePath = image ? `frontend/dist/assets/items/${image}` : null;
+    const imagePath = image ? `/items/${image}` : null;
 
     return (
-        <div className="w-full">
-            <div className="flex flex-col justify-center items-center ">
-                <div className="w-full flex flex-col items-center">
+        <div className="w-full h-full">
+            <div className="flex flex-col ">
+                <div className="w-full flex flex-col justify-center items-center ">
                     {imagePath ? (
                         <img
-                            src={imagePath}
-                            alt="Item"
-                            className="w-[400px] h-[400px] object-contain"
+                        src={imagePath}
+                        alt="Item"
+                        className="max-h-[700px] max-w-[600px] w-auto h-auto object-contain"
                         />
                     ) : (
-                        <ImageIcon style={{ fontSize: '400px' }} />
+                        <ImageIcon style={{ fontSize: '500px' }} />
                     )}
                     <LinearProgress variant="determinate" value={progress} className="w-full mt-2" />
                 </div>
