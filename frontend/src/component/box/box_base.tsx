@@ -1,28 +1,33 @@
 import React from 'react';
+
 import IconButton from '@mui/material/IconButton';
 import EditIcon from '@mui/icons-material/Edit';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 
 interface BoxBaseProps {
     items: { title: string; description: string }[]
-    showEditButton?: boolean
+    buttonOption: "edit" | "view"
 }
 
-export function BoxBase({ items, showEditButton}: BoxBaseProps) {    
+export function BoxBase({ items, buttonOption }: BoxBaseProps) {    
     return (
-        <div className="p-4 w-fill h-auto space-y-4">
-            {items.map((item, index) => (
+        <div className="p-4 w-full h-auto space-y-4">
+            {items.map((item) => (
                 <div
-                    key={index}
+                    
                     className="text-3xl border-2 bg-gray-200 p-4 rounded"
                 >
                     <div className="flex items-center justify-between">
                         <div className="text-black text-xl">{item.title}</div>
-                        {showEditButton  && (
-                        <IconButton aria-label="edit">
-                            <EditIcon />
-                        </IconButton>
+                        {buttonOption === "edit" ? (
+                            <IconButton aria-label="edit">
+                                <EditIcon id={item.title}/>
+                            </IconButton>
+                        ) : (
+                            <IconButton aria-label="view">
+                                <VisibilityIcon id={item.title}/>
+                            </IconButton>
                         )}
-                        
                     </div>
                     <div className="text-gray-800 text-lg pl-4 mt-2">{item.description}</div>
                 </div>

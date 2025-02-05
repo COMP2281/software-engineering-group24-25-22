@@ -32,7 +32,7 @@ export function PendingUploadBox() {
                 Pending Uploads
             </div>
             <div className=" max-h-[50vh] overflow-y-auto rounded">
-                <BoxBase items={pendingItems} showEditButton={true} />
+                <BoxBase items={pendingItems} buttonOption={"edit"}/>
             </div>
         </div>
     );

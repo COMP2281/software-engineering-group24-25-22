@@ -43,7 +43,7 @@ export function PreviosUploadBox() {
                     Previous Upload
                 </div>
                 <div className=" lg:max-h-[80vh] max-h-[50vh] overflow-y-auto rounded">
-                    <BoxBase items={pendingItems} showEditButton={false} />
+                    <BoxBase items={pendingItems} buttonOption={"view"} />
                 </div>
             </div>
         );
