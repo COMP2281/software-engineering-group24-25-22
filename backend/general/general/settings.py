@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.api', 
     'apps.receipts',
+    'apps.parser',
     'rest_framework',
     'rest_framework_simplejwt'
 ]

@@ -36,3 +36,16 @@ class UserDetailsSerializer(serializers.ModelSerializer):
         model = User
         fields = ('email', 'profile', 'is_staff', 'date_joined', 'last_login')
         read_only_fields = ('email', 'is_staff', 'date_joined', 'last_login')
+
+User = get_user_model()
+
+class EmployeeProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmployeeProfile
+        fields = ('employee_id', 'first_name', 'last_name', 'department', 'position', 'manager')
+        read_only_fields = ('employee_id',)  # Typically not changed after creation
+
+class ExpenseSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExpenseSettings
+        fields = ('default_currency', 'expense_approver', 'monthly_expense_limit')
