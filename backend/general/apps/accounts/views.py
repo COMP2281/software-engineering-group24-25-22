@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from apps.accounts.models import EmployeeProfile, ExpenseSettings
+from django.contrib.auth import authenticate
 
 from .serializers import UserRegistrationSerializer, UserDetailsSerializer, EmployeeProfile, EmployeeProfileSerializer, ExpenseSettingsSerializer
 
@@ -21,6 +22,44 @@ class RegisterView(APIView):
                 'access': str(refresh.access_token),
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class LoginView(APIView):
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        """
+        Authenticate user and return JWT tokens
+        Expected payload: {
+            "email": "user@example.com",
+            "password": "userpassword"
+        }
+        """
+        email = request.data.get('email')
+        password = request.data.get('password')
+        
+        if not email or not password:
+            return Response(
+                {'error': 'Please provide both email and password'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        user = authenticate(email=email, password=password)
+        
+        if user:
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+                'user': {
+                    'email': user.email,
+                    'is_staff': user.is_staff,
+                }
+            })
+        
+        return Response(
+            {'error': 'Invalid credentials'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
 
 class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
