@@ -12,12 +12,20 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 
 from pathlib import Path
 import django_stubs_ext
+from urllib import parse
+import os
+from datetime import timedelta
+from os import path
 
 django_stubs_ext.monkeypatch()
+
+mongodb_socket = parse.quote_plus(path.join('../', 'general', 'server', 'db',  'general.sock'))
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Temp upload directory for job processing (not web accessible)
+TEMP_UPLOAD_DIR = os.path.join(BASE_DIR, 'server', 'tmp_uploads')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
@@ -41,6 +49,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'apps.jobs',
+    'apps.optics',
     'rest_framework',
     'rest_framework_simplejwt'
 
@@ -55,6 +64,39 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Celery Configuration
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+CELERY_WORKER_CONCURRENCY = 3  # Limit to 3 concurrent jobs
+CELERY_TASK_ACKS_LATE = True  # Ensure tasks aren't lost on worker crash
+
+# Celery Beat Schedule
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    'template-maintenance-daily': {
+        'task': 'apps.optics.tasks.run_template_maintenance',
+        'schedule': crontab(hour='3', minute='0'),  # Run at 3:00 AM every day
+        'options': {'expires': 60 * 60 * 24},  # Expire after 24 hours
+    },
+    'temp-file-cleanup-daily': {
+        'task': 'apps.jobs.tasks.cleanup_temporary_files',
+        'schedule': crontab(hour='2', minute='0'),  # Run at 2:00 AM every day
+        'options': {'expires': 60 * 60 * 24},  # Expire after 24 hours
+    },
+    'old-job-cleanup-weekly': {
+        'task': 'apps.jobs.tasks.cleanup_old_jobs',
+        'schedule': crontab(hour='1', minute='0', day_of_week='1'),  # Run at 1:00 AM every Monday
+        'options': {'expires': 60 * 60 * 24},  # Expire after 24 hours
+    },
+}
 
 ROOT_URLCONF = 'parser.urls'
 
@@ -76,6 +118,26 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'parser.wsgi.application'
 
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+}
 
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases

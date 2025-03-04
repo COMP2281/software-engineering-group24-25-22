@@ -18,7 +18,7 @@ class ReceiptUploadView(APIView):
     def post(self, request):
         # Validate the uploaded file
         serializer = ReceiptUploadSerializer(data=request.data)
-        if (not serializer.is_valid()) or (serializer.validated_data is None) or (not isinstance(serializer.validated_data, empty)):
+        if (not serializer.is_valid()) or (serializer.validated_data is None) or (isinstance(serializer.validated_data, empty)):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         file_obj = serializer.validated_data['file']

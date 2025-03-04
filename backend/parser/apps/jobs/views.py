@@ -1,14 +1,18 @@
 import json
 import os
+import logging
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.conf import settings
 from django.http import Http404
+from django.utils import timezone
+from typing import Dict, Any
 
 from .models import ProcessingJob
-from .ocr_processor import OCRProcessor # TODO: Implement this
+
+logger = logging.getLogger(__name__)
 
 # API Key Authentication Middleware
 class APIKeyAuthentication:
@@ -77,25 +81,25 @@ class UploadReceiptView(APIView):
             status='pending'
         )
         
-        # Start processing in background
-        # (In a real implementation, this would use Celery or similar)
+        # Queue job for asynchronous processing
+        from apps.optics.tasks import process_receipt_ocr
         try:
-            job.status = 'processing'
-            job.save()
+            # Direct function call since it's a shared_task function
+            task_result = process_receipt_ocr(str(job.job_id))
             
-            # Process the receipt
-            processor = OCRProcessor(job)
-            processor.process()
+            # Update job status directly since we called the task synchronously
+            job.update_status('completed')  # The task will have already completed
             
             # Return job ID
             return Response({
                 'job_id': str(job.job_id),
                 'status': job.status
             }, status=status.HTTP_202_ACCEPTED)
+            
         except Exception as e:
-            job.status = 'failed'
-            job.error_message = str(e)
-            job.save()
+            # Handle processing error
+            job.update_status('failed', error_message=f"Failed to process job: {str(e)}")
+            
             return Response(
                 {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -164,9 +168,19 @@ class ConfirmJobView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
         
-        # In a real implementation, here we would:
-        # 1. Move file from temporary storage to permanent storage (GridFS)
-        # 2. Create Receipt and CostItem records in the database
+        # Transfer to permanent storage and create records
+        from .tasks import transfer_to_gridfs
+        
+        # Queue file transfer to GridFS in the background
+        # Direct function call since it's a shared_task function
+        transfer_task = transfer_to_gridfs(str(job.job_id))
+        
+        # Update job with confirmation details
+        if not hasattr(job, 'metadata') or job.metadata is None:
+            job.metadata = {}
+        
+        job.metadata['confirmed_at'] = timezone.now().isoformat()
+        job.update_status('confirmed')
         
         # Return the final receipt data
         return Response({
@@ -193,13 +207,20 @@ class DiscardJobView(APIView):
                 os.remove(job.uploaded_file.path)
         
         # Delete any preprocessed images
-        job_dir = os.path.dirname(job.uploaded_file.path)
-        for filename in os.listdir(job_dir):
-            if filename.startswith(str(job.job_id)):
-                os.remove(os.path.join(job_dir, filename))
+        try:
+            if job.uploaded_file and hasattr(job.uploaded_file, 'path'):
+                job_dir = os.path.dirname(job.uploaded_file.path)
+                if os.path.exists(job_dir):
+                    for filename in os.listdir(job_dir):
+                        if filename.startswith(str(job.job_id)):
+                            file_path = os.path.join(job_dir, filename)
+                            if os.path.exists(file_path):
+                                os.remove(file_path)
+        except Exception as e:
+            logger.warning(f"Failed to clean up job files: {str(e)}")
         
-        # Delete the job
-        job.delete()
+        # Mark job as discarded (instead of deleting - for audit purposes)
+        job.update_status('discarded')
         
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -226,14 +247,82 @@ class EditJobDataView(APIView):
         # Get the edited data (already validated by General Server)
         edited_data = json.loads(request.body)
         
+        # Store original data for template feedback
+        original_data = job.processed_data.copy() if job.processed_data else {}
+        
         # Merge edited data with existing data
-        if job.processed_data is None:
-            job.processed_data = {}
+        processed_data: Dict[str, Any] = {} if job.processed_data is None else dict(job.processed_data)
             
+        # Create a new dictionary with updated values
         for key, value in edited_data.items():
             if value is not None:  # Only update fields that were provided
-                job.processed_data[key] = value
+                processed_data[key] = value
         
+        # Assign the new dictionary to processed_data
+        job.processed_data = processed_data
+        
+        # Save the updated job
         job.save()
         
-        return Response(job.processed_data)
+        # Count number of fields that were corrected
+        corrected_fields = {}
+        for key, value in edited_data.items():
+            if key in original_data and original_data[key] != value:
+                corrected_fields[key] = {
+                    'original': original_data[key],
+                    'corrected': value
+                }
+        
+        # If fields were corrected, trigger template learning through TemplateSuite
+        if corrected_fields and job.template_used:
+            try:
+                from django.core.cache import cache
+                from apps.optics.services import TemplateSuite
+                
+                cache_key = f"template_improvement_{job.job_id}"
+                
+                # Only proceed if we haven't processed this job's corrections already
+                if not cache.get(cache_key):
+                    # Set flag to prevent duplicate processing
+                    cache.set(cache_key, True, timeout=3600)  # 1 hour timeout
+                    
+                    # Get the original OCR text from job metadata or use a placeholder
+                    ocr_text = job.metadata.get('ocr_text', 'No OCR text available')
+                    
+                    # Log the correction details
+                    logger.info(
+                        f"User corrected {len(corrected_fields)} fields for job {job.job_id}. "
+                        f"Sending corrections to template system."
+                    )
+                    
+                    # Convert to API format using the service helpers
+                    # Original data in API format
+                    original_api_data = TemplateSuite.convert_to_api_format(original_data)
+                    
+                    # Ensure processed_data is not None
+                    processed_data = job.processed_data if job.processed_data is not None else {}
+                    
+                    # Corrected data in API format
+                    corrected_api_data = TemplateSuite.convert_to_api_format(processed_data)
+                    
+                    # Process the correction through TemplateSuite
+                    result = TemplateSuite.process_correction(
+                        ocr_text=ocr_text,
+                        template_id=job.template_used,
+                        original_data=original_api_data,
+                        corrected_data=corrected_api_data
+                    )
+                    
+                    # Check if the template was updated successfully
+                    if result.get('success'):
+                        logger.info(
+                            f"Template {result.get('template_action')} successfully: "
+                            f"{result.get('template_id')}"
+                        )
+                    else:
+                        logger.error(f"Template update failed: {result.get('error', 'Unknown error')}")
+                        
+            except Exception as e:
+                logger.error(f"Error during template improvement: {e}", exc_info=True)
+        
+        return Response(job.processed_data or {})

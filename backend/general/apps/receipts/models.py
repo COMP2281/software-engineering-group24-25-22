@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from decimal import Decimal
 
 
 class Receipt(models.Model):
@@ -88,7 +89,7 @@ class CostItem(models.Model):
     )
     item_name = models.CharField(max_length=255)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
-    quantity = models.DecimalField(max_digits=8, decimal_places=2, default=1.0)
+    quantity = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal('1.00'))
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     
     def save(self, *args, **kwargs):
