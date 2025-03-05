@@ -36,3 +36,6 @@ parser/server/tmp_uploads/*
 backend/*.py
 backend/*.md
 temp.py
+**/migrations/__pycache__/
+**/migrations/*.pyc
+*.sqlite3

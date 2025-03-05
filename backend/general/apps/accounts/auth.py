@@ -6,10 +6,10 @@ from django.contrib.auth.models import AnonymousUser
 from django.conf import settings
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.authentication import get_authorization_header
-from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed
+from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed, TokenError
 from rest_framework import HTTP_HEADER_ENCODING
 
-from .models import User
+from .models import User, BlacklistedToken
 
 
 class MongoEngineBackend(BaseBackend):
@@ -63,6 +63,20 @@ class MongoJWTAuthentication(JWTAuthentication):
     JWT authentication to use MongoEngine instead of Django ORM.
     """
     user_id_claim = 'user_id'
+    
+    def get_validated_token(self, raw_token):
+        """
+        Override to check if the token is blacklisted
+        """
+        # First validate the token
+        validated_token = super().get_validated_token(raw_token)
+        
+        # Check if token is blacklisted
+        jti = validated_token.get('jti')
+        if jti and BlacklistedToken.is_blacklisted(jti):
+            raise InvalidToken('Token is blacklisted', code='token_blacklisted')
+            
+        return validated_token
     
     def get_user(self, validated_token):
         """

@@ -7,6 +7,9 @@ from django.dispatch import receiver
 from django.contrib.auth.hashers import make_password, check_password
 import uuid
 
+# Django ORM imports for blacklisted tokens
+from django.db import models
+
 
 # In mongoengine, we'll add these methods directly to the User class
 # rather than using a separate manager
@@ -180,3 +183,33 @@ class ExpenseSettings(Document):
             'expense_approver'
         ]
     }
+
+
+# This model uses Django's ORM, not MongoEngine
+class BlacklistedToken(models.Model):
+    """
+    Model for storing blacklisted JWT tokens in SQLite.
+    This uses Django's ORM, not MongoEngine.
+    """
+    token_jti = models.CharField(max_length=255, unique=True)
+    user_id = models.CharField(max_length=255, null=True, blank=True)
+    blacklisted_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField()
+    
+    class Meta:
+        db_table = 'blacklisted_tokens'
+        indexes = [
+            models.Index(fields=['token_jti']),
+            models.Index(fields=['user_id']),
+            models.Index(fields=['expires_at']),
+        ]
+    
+    @classmethod
+    def is_blacklisted(cls, token_jti):
+        """Check if a token JTI is blacklisted"""
+        return cls.objects.filter(token_jti=token_jti).exists()
+    
+    @classmethod
+    def clean_expired_tokens(cls):
+        """Remove expired tokens from the blacklist"""
+        cls.objects.filter(expires_at__lt=timezone.now()).delete()

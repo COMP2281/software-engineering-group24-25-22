@@ -3,9 +3,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from .models import User, EmployeeProfile, ExpenseSettings
+from .models import User, EmployeeProfile, ExpenseSettings, BlacklistedToken
 from django.contrib.auth import authenticate
 import mongoengine.errors
+import jwt
+from datetime import datetime
 
 from .serializers import (
     UserRegistrationSerializer, 
@@ -27,9 +29,19 @@ class RegisterView(APIView):
             try:
                 user = serializer.save()
                 refresh = RefreshToken.for_user(user)
+                
+                # Get the user's profile
+                profile = EmployeeProfile.objects(user=user).first()
+                profile_data = EmployeeProfileSerializer(profile).data if profile else None
+                
+                # Include user details with profile in the response
+                user_data = UserDetailsSerializer(user).data
+                user_data['profile'] = profile_data
+                
                 return Response({
                     'refresh': str(refresh),
                     'access': str(refresh.access_token),
+                    'user': user_data
                 }, status=status.HTTP_201_CREATED)
             except mongoengine.errors.NotUniqueError:
                 return Response({
@@ -94,12 +106,71 @@ class LogoutView(APIView):
     
     def post(self, request):
         try:
-            refresh_token = request.data["refresh"]
-            token = RefreshToken(refresh_token)
-            token.blacklist()
-            return Response(status=status.HTTP_205_RESET_CONTENT)
-        except Exception as _:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+            refresh_token = request.data.get("refresh")
+            if not refresh_token:
+                return Response(
+                    {"error": "Refresh token is required"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Decode the token to get its claims
+            decoded_token = jwt.decode(
+                refresh_token, 
+                options={"verify_signature": False}  # We don't need to verify the signature here
+            )
+            
+            # Get the token ID and expiration
+            jti = decoded_token.get('jti')
+            exp = decoded_token.get('exp')
+            user_id = decoded_token.get('user_id')
+            
+            if not jti or not exp:
+                return Response(
+                    {"error": "Invalid token format"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Add to blacklist
+            BlacklistedToken.objects.create(
+                token_jti=jti,
+                user_id=user_id,
+                expires_at=datetime.fromtimestamp(exp)
+            )
+            
+            # Also blacklist the access token if provided
+            access_token = request.data.get("access")
+            if access_token:
+                try:
+                    decoded_access = jwt.decode(
+                        access_token, 
+                        options={"verify_signature": False}
+                    )
+                    
+                    access_jti = decoded_access.get('jti')
+                    access_exp = decoded_access.get('exp')
+                    
+                    if access_jti and access_exp:
+                        BlacklistedToken.objects.create(
+                            token_jti=access_jti,
+                            user_id=user_id,
+                            expires_at=datetime.fromtimestamp(access_exp)
+                        )
+                except Exception:
+                    # Ignore access token blacklisting errors
+                    pass
+            
+            # Clean up any expired tokens
+            BlacklistedToken.clean_expired_tokens()
+            
+            return Response(
+                {"detail": "Successfully logged out"}, 
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Unable to log out: {str(e)}"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class UserDetailView(APIView):
     permission_classes = [permissions.IsAuthenticated]

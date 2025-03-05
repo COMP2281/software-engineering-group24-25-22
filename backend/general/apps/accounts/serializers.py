@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import User, EmployeeProfile, ExpenseSettings
+from .models import User, EmployeeProfile, ExpenseSettings, BlacklistedToken
+import jwt
 
 # Base serializer for MongoEngine documents
 class MongoEngineModelSerializer(serializers.Serializer):
@@ -25,18 +26,66 @@ class UserRegistrationSerializer(MongoEngineModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
     
+    # Employee profile fields
+    first_name = serializers.CharField(required=True)
+    last_name = serializers.CharField(required=True)
+    department = serializers.CharField(required=True)
+    position = serializers.CharField(required=True)
+    manager = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    
     class Meta:
         model = User
-        fields = ('email', 'password', 'password2')
+        fields = ('email', 'password', 'password2', 'first_name', 'last_name', 
+                  'department', 'position', 'manager')
     
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
+            
+        # Validate manager if provided
+        manager = attrs.get('manager')
+        if manager and manager.strip():
+            try:
+                # Check if manager exists
+                manager_profile = EmployeeProfile.objects(id=manager).first()
+                if not manager_profile:
+                    raise serializers.ValidationError({"manager": "Manager not found"})
+            except Exception:
+                raise serializers.ValidationError({"manager": "Invalid manager ID"})
+                
         return attrs
     
     def create(self, validated_data):
+        # Extract profile data
+        profile_data = {
+            'first_name': validated_data.pop('first_name'),
+            'last_name': validated_data.pop('last_name'),
+            'department': validated_data.pop('department'),
+            'position': validated_data.pop('position')
+        }
+        
+        # Get optional manager
+        manager_id = validated_data.pop('manager', None)
+        if manager_id and manager_id.strip():
+            profile_data['manager'] = EmployeeProfile.objects.get(id=manager_id)
+        
+        # Remove the password confirmation field
         validated_data.pop('password2')
+        
+        # Create user
         user = User.create_user(**validated_data)
+        
+        # Generate employee ID based on total count + 1
+        employee_count = EmployeeProfile.objects.count()
+        employee_id = str(employee_count + 1)
+        
+        # Create employee profile
+        profile_data['employee_id'] = employee_id
+        profile_data['user'] = user
+        
+        profile = EmployeeProfile(**profile_data)
+        profile.save()
+        
         return user
 
 class UserProfileSerializer(MongoEngineModelSerializer):
@@ -58,7 +107,7 @@ class UserDetailsSerializer(MongoEngineModelSerializer):
     def get_profile(self, obj):
         try:
             profile = EmployeeProfile.objects(user=obj).first()
-            return UserProfileSerializer(profile).data if profile else None
+            return EmployeeProfileSerializer(profile).data if profile else None
         except Exception:
             return None
 
@@ -178,6 +227,17 @@ class CustomTokenRefreshSerializer(serializers.Serializer):
         from rest_framework_simplejwt.exceptions import TokenError
         
         try:
+            # First, check if the token is blacklisted
+            decoded = jwt.decode(
+                attrs['refresh'], 
+                options={"verify_signature": False}
+            )
+            jti = decoded.get('jti')
+            
+            if jti and BlacklistedToken.is_blacklisted(jti):
+                raise serializers.ValidationError('Token is blacklisted')
+            
+            # If not blacklisted, continue with refresh
             refresh = RefreshToken(attrs['refresh'])
             user_id = refresh.payload.get('user_id')
             

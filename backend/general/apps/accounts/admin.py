@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.db import models
 from django.utils.html import format_html
-from .models import User, EmployeeProfile, ExpenseSettings
+from .models import User, EmployeeProfile, ExpenseSettings, BlacklistedToken
 
 # Create proxy models for MongoDB documents
 class UserProxy(models.Model):
@@ -215,3 +215,24 @@ class ExpenseSettingsAdmin(MongoDBAdmin):
 admin.site.register(UserProxy, UserAdmin)
 admin.site.register(EmployeeProfileProxy, EmployeeProfileAdmin)
 admin.site.register(ExpenseSettingsProxy, ExpenseSettingsAdmin)
+
+# Register the BlacklistedToken model with Django's default admin
+@admin.register(BlacklistedToken)
+class BlacklistedTokenAdmin(admin.ModelAdmin):
+    """Admin class for BlacklistedToken model"""
+    list_display = ('token_jti', 'user_id', 'blacklisted_at', 'expires_at')
+    list_filter = ('blacklisted_at', 'expires_at')
+    search_fields = ('token_jti', 'user_id')
+    date_hierarchy = 'blacklisted_at'
+    
+    actions = ['clean_expired_tokens']
+    
+    def clean_expired_tokens(self, request, queryset):
+        """Admin action to clean expired tokens"""
+        from django.utils import timezone
+        
+        expired_count = BlacklistedToken.objects.filter(expires_at__lt=timezone.now()).count()
+        BlacklistedToken.clean_expired_tokens()
+        
+        self.message_user(request, f'Successfully removed {expired_count} expired tokens.')
+    clean_expired_tokens.short_description = "Remove expired tokens"
