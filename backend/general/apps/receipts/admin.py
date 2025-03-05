@@ -20,9 +20,11 @@ class CostItemProxy(models.Model):
         app_label = 'receipts'
 
 # Admin classes for MongoDB documents
+from apps.accounts.admin import MongoDBAdmin
+
 class ReceiptAdmin(MongoDBAdmin):
     mongo_model = Receipt
-    list_display = ('get_id', 'get_merchant', 'get_date', 'get_amount', 'get_status', 'get_employee')
+    list_display = ('get_id', 'get_merchant', 'get_date', 'get_amount', 'get_status', 'get_employee', 'get_approver')
     search_fields = ('merchant_name', 'reference_number')
     # Remove list_filter for now as it causes issues with proxy models
     list_filter = ()
@@ -40,12 +42,25 @@ class ReceiptAdmin(MongoDBAdmin):
     get_amount.short_description = 'Amount'
     
     def get_status(self, obj):
-        return obj.status
+        status_colors = {
+            'pending': '#FFC107',  # Amber
+            'approved': '#4CAF50',  # Green
+            'rejected': '#F44336',  # Red
+        }
+        color = status_colors.get(obj.status, '#000000')
+        return f'<span style="color:{color};font-weight:bold;">{obj.status}</span>'
     get_status.short_description = 'Status'
+    get_status.allow_tags = True
     
+    @MongoDBAdmin.reference_field(app='accounts', model='userproxy')
     def get_employee(self, obj):
-        return obj.employee.email if obj.employee else 'N/A'
+        return obj.employee
     get_employee.short_description = 'Employee'
+    
+    @MongoDBAdmin.reference_field(app='accounts', model='userproxy') 
+    def get_approver(self, obj):
+        return obj.approver
+    get_approver.short_description = 'Approver'
 
 class CostItemAdmin(MongoDBAdmin):
     mongo_model = CostItem
@@ -56,11 +71,9 @@ class CostItemAdmin(MongoDBAdmin):
         return obj.item_name
     get_item_name.short_description = 'Item'
     
+    @MongoDBAdmin.reference_field(app='receipts', model='receiptproxy')
     def get_receipt(self, obj):
-        receipt = obj.receipt
-        if receipt:
-            return f"{receipt.merchant_name} ({receipt.id})"
-        return 'N/A'
+        return obj.receipt
     get_receipt.short_description = 'Receipt'
     
     def get_quantity(self, obj):
