@@ -84,7 +84,8 @@ WSGI_APPLICATION = 'general.wsgi.application'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'apps.accounts.auth.MongoJWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ),
 }
 
@@ -107,13 +108,20 @@ SIMPLE_JWT = {
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
 
+import mongoengine
+
+# Connect to MongoDB
+mongoengine.connect(
+    db='receipt_scanner_db',
+    host='mongodb://'+mongodb_socket
+)
+
+# Django still needs a database for its own functionality
+# This will be unused but is required for Django to work
 DATABASES = {
     'default': {
-        'ENGINE': 'djongo',
-        'NAME': 'receipt_scanner_db',
-        'CLIENT': {
-            'host': 'mongodb://'+mongodb_socket,
-        }
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
@@ -137,7 +145,13 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-AUTH_USER_MODEL = 'accounts.User'
+# For mongoengine, we use a custom auth backend instead of AUTH_USER_MODEL
+# AUTH_USER_MODEL = 'accounts.User'
+
+AUTHENTICATION_BACKENDS = [
+    'apps.accounts.auth.MongoEngineBackend',
+    'django.contrib.auth.backends.ModelBackend',  # Keep the default backend as fallback
+]
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.1/topics/i18n/
@@ -160,3 +174,7 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# File Parser Service Configuration
+FILE_PARSER_SERVER_URL = 'http://localhost:8001'
+FILE_PARSER_API_KEY = 'test_api_key'

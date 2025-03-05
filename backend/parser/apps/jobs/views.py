@@ -72,7 +72,7 @@ class UploadReceiptView(APIView):
             )
             
         # Create a new processing job
-        job = ProcessingJob.objects.create(
+        job = ProcessingJob(
             user_id=user_id,
             original_filename=metadata.get('original_filename', file_obj.name),
             file_type=metadata.get('content_type', file_obj.content_type),
@@ -80,6 +80,7 @@ class UploadReceiptView(APIView):
             metadata=metadata,
             status='pending'
         )
+        job.save()
         
         # Queue job for asynchronous processing
         from apps.optics.tasks import process_receipt_ocr

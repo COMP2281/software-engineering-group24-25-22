@@ -17,6 +17,12 @@ from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
+    # Include the optics app URLs at the root
     path("", include("apps.optics.urls")),
+    
+    # Include the jobs app URLs under /api/parser/
+    path('api/parser/', include('apps.jobs.urls')),
+    
+    # Admin site
     path('admin/', admin.site.urls),
 ]

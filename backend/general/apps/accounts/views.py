@@ -2,10 +2,19 @@ from rest_framework import status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from apps.accounts.models import EmployeeProfile, ExpenseSettings
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from .models import User, EmployeeProfile, ExpenseSettings
 from django.contrib.auth import authenticate
+import mongoengine.errors
 
-from .serializers import UserRegistrationSerializer, UserDetailsSerializer, EmployeeProfile, EmployeeProfileSerializer, ExpenseSettingsSerializer
+from .serializers import (
+    UserRegistrationSerializer, 
+    UserDetailsSerializer, 
+    EmployeeProfileSerializer, 
+    ExpenseSettingsSerializer,
+    CustomTokenObtainPairSerializer,
+    CustomTokenRefreshSerializer
+)
 
 # TODO: Improve the error responses
 
@@ -15,13 +24,32 @@ class RegisterView(APIView):
     def post(self, request):
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.save()
-            refresh = RefreshToken.for_user(user)
-            return Response({
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            }, status=status.HTTP_201_CREATED)
+            try:
+                user = serializer.save()
+                refresh = RefreshToken.for_user(user)
+                return Response({
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                }, status=status.HTTP_201_CREATED)
+            except mongoengine.errors.NotUniqueError:
+                return Response({
+                    'email': ['A user with this email already exists.']
+                }, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                return Response({
+                    'error': str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """Custom JWT token view for MongoEngine User model"""
+    serializer_class = CustomTokenObtainPairSerializer
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    """Custom token refresh view for MongoEngine User model"""
+    serializer_class = CustomTokenRefreshSerializer
+
 
 class LoginView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -43,23 +71,23 @@ class LoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        user = authenticate(email=email, password=password)
-        
-        if user:
-            refresh = RefreshToken.for_user(user)
-            return Response({
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-                'user': {
-                    'email': user.email,
-                    'is_staff': user.is_staff,
-                }
-            })
-        
-        return Response(
-            {'error': 'Invalid credentials'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
+        try:
+            user = authenticate(request=request, email=email, password=password)
+            
+            if user:
+                serializer = CustomTokenObtainPairSerializer(context={"request": request})
+                tokens = serializer.validate({"email": email, "password": password})
+                return Response(tokens)
+            
+            return Response(
+                {'error': 'Invalid credentials'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Login failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -95,9 +123,36 @@ class EmployeeProfileView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
     
+    def post(self, request):
+        """Create a new employee profile for the authenticated user"""
+        try:
+            # Check if profile already exists
+            profile = EmployeeProfile.objects(user=request.user).first()
+            if profile:
+                return Response(
+                    {"detail": "Employee profile already exists"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            # Create new profile
+            data = request.data.copy()
+            data['user'] = str(request.user.id)
+            
+            serializer = EmployeeProfileSerializer(data=data)
+            if serializer.is_valid():
+                profile = serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {"detail": f"Error creating profile: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
     def put(self, request):
         """Update the employee profile for the authenticated user"""
         try:
+            # Keep the .get() method as it's correct in MongoEngine too
             profile = EmployeeProfile.objects.get(user=request.user)
             serializer = EmployeeProfileSerializer(profile, data=request.data, partial=True)
             if serializer.is_valid():

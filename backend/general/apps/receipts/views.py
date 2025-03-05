@@ -24,7 +24,8 @@ class ReceiptViewSet(viewsets.ModelViewSet):
         """
         This view returns a list of all receipts for the currently authenticated user.
         """
-        return super().get_queryset().filter(employee=self.request.user)
+        # mongoengine syntax for querying
+        return Receipt.objects(employee=self.request.user)
 
     def perform_create(self, serializer):
         """
@@ -39,25 +40,26 @@ class ReceiptViewSet(viewsets.ModelViewSet):
         """
         format_type = request.query_params.get('format', 'csv')
         
-        queryset = Receipt.objects.all()
+        # Start with all receipts for the current user
+        queryset = Receipt.objects(employee=self.request.user)
         
         # Date range filtering
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
         if start_date:
-            queryset = queryset.filter(transaction_time__gte=start_date)
+            queryset = queryset(transaction_time__gte=start_date)
         if end_date:
-            queryset = queryset.filter(transaction_time__lte=end_date)
+            queryset = queryset(transaction_time__lte=end_date)
         
         # Category filtering
         category = request.query_params.get('category')
         if category:
-            queryset = queryset.filter(category=category)
+            queryset = queryset(category=category)
         
         # Status filtering
         status = request.query_params.get('status')
         if status:
-            queryset = queryset.filter(status=status)
+            queryset = queryset(status=status)
         
         # Limit results
         limit = request.query_params.get('limit')

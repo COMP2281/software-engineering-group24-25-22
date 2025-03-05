@@ -9,7 +9,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         # Check if generic template already exists
-        if ReceiptTemplate.objects.filter(merchant_name='Generic').exists():
+        if ReceiptTemplate.objects(merchant_name='Generic').count() > 0:
             self.stdout.write(self.style.WARNING('Generic template already exists'))
             return
         

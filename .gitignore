@@ -31,3 +31,8 @@ dist-ssr
 # Ignore temporary uploads except .gitkeep
 parser/server/tmp_uploads/*
 !parser/server/tmp_uploads/.gitkeep
+**backend/tests/**
+**backend/notes/**
+backend/*.py
+backend/*.md
+temp.py

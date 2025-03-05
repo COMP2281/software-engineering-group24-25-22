@@ -2,7 +2,7 @@ from typing import List, Dict, Any, Optional, Tuple
 import logging
 from datetime import timedelta
 from django.utils import timezone
-from django.db.models import Q, Sum
+from mongoengine.queryset.visitor import Q
 
 from .models import ReceiptTemplate
 from .lib.templates import OCRTemplate, OCRTemplateCorrection
@@ -35,40 +35,40 @@ class TemplateSuite:
             List of template objects sorted by relevance
         """
         # First, try exact match on active templates
-        exact_matches = ReceiptTemplate.objects.filter(
+        exact_matches = ReceiptTemplate.objects(
             merchant_name__iexact=merchant_name,
             is_archived=False
         ).order_by('-usage_count')[:limit]
 
-        if exact_matches.exists():
+        if exact_matches.count() > 0:
             return list(exact_matches)
 
         # If no exact match, try fuzzy match on active templates
         # This is a simplified fuzzy match using contains
         # In production, you would use a more sophisticated approach
-        fuzzy_matches = ReceiptTemplate.objects.filter(
+        fuzzy_matches = ReceiptTemplate.objects(
             merchant_name__icontains=merchant_name.split(
             )[0] if merchant_name.split() else "",
             is_archived=False
         ).order_by('-usage_count')[:limit]
 
-        if fuzzy_matches.exists():
+        if fuzzy_matches.count() > 0:
             return list(fuzzy_matches)
 
         # If still no matches, check archived templates
-        archived_matches = ReceiptTemplate.objects.filter(
+        archived_matches = ReceiptTemplate.objects(
             Q(merchant_name__iexact=merchant_name) |
             Q(merchant_name__icontains=merchant_name.split()
               [0] if merchant_name.split() else ""),
             is_archived=True
         ).order_by('-usage_count')[:limit]
 
-        if archived_matches.exists():
+        if archived_matches.count() > 0:
             return list(archived_matches)
 
         # If no matches at all, return generic templates
         # Assuming generic templates have merchant_name = 'Generic'
-        generic_templates = ReceiptTemplate.objects.filter(
+        generic_templates = ReceiptTemplate.objects(
             merchant_name='Generic'
         ).order_by('-usage_count')[:limit]
 
@@ -139,10 +139,9 @@ class TemplateSuite:
 
         # Update usage statistics periodically
         if template.usage_count % 10 == 0:  # Every 10 uses
-            # Get total uses for this merchant
-            total_merchant_uses = ReceiptTemplate.objects.filter(
-                merchant_name=template.merchant_name
-            ).aggregate(total=Sum('usage_count'))['total'] or 1
+            # Get total uses for this merchant - calculated manually in MongoEngine
+            templates = ReceiptTemplate.objects(merchant_name=template.merchant_name)
+            total_merchant_uses = sum(t.usage_count for t in templates) or 1
 
             # Update statistics
             template.update_recent_usage_stats(total_merchant_uses)
@@ -359,7 +358,7 @@ class TemplateSuite:
         now = timezone.now()
         threshold_date = now - timedelta(days=60)
 
-        old_archived_templates = ReceiptTemplate.objects.filter(
+        old_archived_templates = ReceiptTemplate.objects(
             is_archived=True,
             updated_at__lt=threshold_date
         )
@@ -378,7 +377,7 @@ class TemplateSuite:
             template_id: ID of the template to check
         """
         try:
-            template = ReceiptTemplate.objects.get(id=template_id)
+            template = ReceiptTemplate.objects(id=template_id).get()
 
             if template.is_archived and template.success_rate > 80:
                 template.unarchive()

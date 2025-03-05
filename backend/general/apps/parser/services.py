@@ -49,9 +49,10 @@ class ParserService:
         # Prepare multipart form data
         files = {'file': file_obj}
         
-        # Send metadata as JSON
+        # Send metadata as JSON with custom encoder for MongoDB ObjectId
+        from .json_utils import MongoJSONEncoder
         headers = self.headers.copy()
-        headers['X-Receipt-Metadata'] = json.dumps(metadata)
+        headers['X-Receipt-Metadata'] = json.dumps(metadata, cls=MongoJSONEncoder)
         
         response = requests.post(url, files=files, headers=headers)
         return self._handle_response(response)
@@ -65,9 +66,19 @@ class ParserService:
     def confirm_job(self, job_id, user_id):
         """Confirm a processed receipt"""
         url = f"{self.base_url}/api/parser/confirm/{job_id}/"
-        data = {'user_id': user_id}
         
-        response = requests.post(url, json=data, headers=self.headers)
+        # Use MongoJSONEncoder to handle ObjectId and Decimal
+        from .json_utils import MongoJSONEncoder
+        
+        # Convert data to JSON string with custom encoder
+        data = {'user_id': user_id}
+        headers = self.headers.copy()
+        headers['Content-Type'] = 'application/json'
+        
+        # Convert to JSON-safe format
+        data_str = json.dumps(data, cls=MongoJSONEncoder)
+        
+        response = requests.post(url, data=data_str, headers=headers)
         return self._handle_response(response)
     
     def discard_job(self, job_id):
@@ -81,9 +92,15 @@ class ParserService:
         """Edit the data extracted from a receipt"""
         url = f"{self.base_url}/api/parser/edit/{job_id}/"
         
-        response = requests.post(
-            url, 
-            json=validated_data,
-            headers=self.headers
-        )
+        # Use MongoJSONEncoder to handle ObjectId and Decimal
+        from .json_utils import MongoJSONEncoder
+        
+        # Convert data to JSON string with custom encoder
+        headers = self.headers.copy()
+        headers['Content-Type'] = 'application/json'
+        
+        # Convert to JSON-safe format
+        data_str = json.dumps(validated_data, cls=MongoJSONEncoder)
+        
+        response = requests.post(url, data=data_str, headers=headers)
         return self._handle_response(response)

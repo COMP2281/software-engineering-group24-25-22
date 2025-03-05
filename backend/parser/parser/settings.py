@@ -63,6 +63,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'apps.jobs.views.APIKeyAuthentication',  # Add API key authentication middleware
 ]
 
 # Celery Configuration
@@ -142,6 +143,16 @@ SIMPLE_JWT = {
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
 
+import mongoengine
+
+# Connect to MongoDB
+mongoengine.connect(
+    db='receipt_scanner_db',
+    host='mongodb://'+mongodb_socket
+)
+
+# Django still needs a database for its own functionality
+# This will be unused but is required for Django to work
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -190,3 +201,6 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# API Authentication Key
+API_KEY = 'test_api_key'

@@ -30,9 +30,9 @@ def cleanup_temporary_files():
         return
     
     # Get list of active job IDs 
-    active_jobs = list(ProcessingJob.objects.filter(
+    active_jobs = [str(job.job_id) for job in ProcessingJob.objects(
         status__in=['pending', 'processing']
-    ).values_list('job_id', flat=True))
+    )]
     
     # Get all job directories
     job_dirs = [d for d in temp_dir.iterdir() if d.is_dir()]
@@ -125,9 +125,9 @@ def cleanup_old_jobs():
     cutoff_date = timezone.now() - timedelta(days=90)
     
     # Get jobs in terminal states older than cutoff date
-    old_jobs = ProcessingJob.objects.filter(
-        Q(status__in=['completed', 'confirmed', 'failed', 'discarded']),
-        Q(created_at__lt=cutoff_date)
+    old_jobs = ProcessingJob.objects(
+        status__in=['completed', 'confirmed', 'failed', 'discarded'],
+        created_at__lt=cutoff_date
     )
     
     # Count jobs to be deleted
@@ -138,7 +138,7 @@ def cleanup_old_jobs():
     if count > 0:
         # Delete the jobs
         deletion_result = old_jobs.delete()
-        logger.info(f"Deleted {deletion_result[0]} job records")
+        logger.info(f"Deleted {count} job records")
     
     # Calculate duration
     duration = timezone.now() - start_time

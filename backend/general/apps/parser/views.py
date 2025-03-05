@@ -7,6 +7,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
 from .services import ParserService, ParserServiceError
 from .serializers import ReceiptUploadSerializer, ReceiptDataSerializer
+from .json_utils import MongoJSONEncoder
 
 class ReceiptUploadView(APIView):
     """
@@ -135,7 +136,15 @@ class EditJobDataView(APIView):
         
         try:
             parser_service = ParserService()
-            result = parser_service.edit_job_data(job_id, serializer.validated_data)
+            # Convert Decimal values to floats to avoid JSON serialization issues
+            from .json_utils import MongoJSONEncoder
+            import json
+            
+            # Convert to JSON string and back to handle all non-standard types
+            data_json = json.dumps(serializer.validated_data, cls=MongoJSONEncoder)
+            serializable_data = json.loads(data_json)
+            
+            result = parser_service.edit_job_data(job_id, serializable_data)
             return Response(result)
         except ParserServiceError as e:
             return Response(

@@ -1,4 +1,5 @@
-from djongo import models
+from mongoengine import Document, EmbeddedDocument, StringField, DateTimeField, IntField
+from mongoengine import FloatField, BooleanField, ListField, DictField, CASCADE, NULLIFY
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from typing import Optional
@@ -213,29 +214,29 @@ def validate_recent_usage(value):
                 raise ValidationError(f"'{field}' must be non-negative")
 
 
-class ReceiptTemplate(models.Model):
+class ReceiptTemplate(Document):
     """
     MongoDB-backed template model for pattern-based receipt parsing.
     Templates evolve through continuous refinement from user corrections.
     """
     # Tracking metadata
-    created_at = models.DateTimeField(default=timezone.now)
-    updated_at = models.DateTimeField(auto_now=True)
-    last_used_at = models.DateTimeField(default=timezone.now)
-    usage_count = models.IntegerField(default=0)
-    success_rate = models.FloatField(default=0.0)  # 0-100 percentage
-    override_rate = models.FloatField(default=0.0)  # 0-100 percentage
-    avg_edit_distance = models.FloatField(default=0.0)  # Average character-level differences
-    is_archived = models.BooleanField(default=False)
-    archived_at = models.DateTimeField(null=True, blank=True)
+    created_at = DateTimeField(default=timezone.now)
+    updated_at = DateTimeField()
+    last_used_at = DateTimeField(default=timezone.now)
+    usage_count = IntField(default=0)
+    success_rate = FloatField(default=0.0)  # 0-100 percentage
+    override_rate = FloatField(default=0.0)  # 0-100 percentage
+    avg_edit_distance = FloatField(default=0.0)  # Average character-level differences
+    is_archived = BooleanField(default=False)
+    archived_at = DateTimeField()
     
     # Merchant identifiers
-    merchant_name = models.CharField(max_length=255)
+    merchant_name = StringField(max_length=255, required=True)
     
     # Currency information - stored as a nested document
-    currency_info = models.JSONField(
+    currency_info = DictField(
         default=dict,
-        validators=[validate_currency_info]
+        validation=validate_currency_info
     )
     # Example structure:
     # {
@@ -247,9 +248,9 @@ class ReceiptTemplate(models.Model):
     # }
     
     # Field extractors - complex patterns for finding specific data points
-    field_extractors = models.JSONField(
+    field_extractors = DictField(
         default=dict,
-        validators=[validate_field_extractors]
+        validation=validate_field_extractors
     )
     # Example structure:
     # {
@@ -271,13 +272,14 @@ class ReceiptTemplate(models.Model):
     # }
     
     # Line items configuration
-    has_line_items = models.BooleanField(default=True)
-    line_items_start_line = models.IntegerField(default=5)
+    has_line_items = BooleanField(default=True)
+    line_items_start_line = IntField(default=5)
     
     # Item patterns - for extracting line items from receipts
-    item_patterns = models.JSONField(
+    item_patterns = ListField(
+        field=DictField(),
         default=list,
-        validators=[validate_item_patterns]
+        validation=validate_item_patterns
     )
     # Example structure:
     # [
@@ -288,9 +290,9 @@ class ReceiptTemplate(models.Model):
     # ]
     
     # Field-specific accuracy tracking
-    field_accuracy = models.JSONField(
+    field_accuracy = DictField(
         default=dict,
-        validators=[validate_field_accuracy]
+        validation=validate_field_accuracy
     )
     # Example structure:
     # {
@@ -300,9 +302,9 @@ class ReceiptTemplate(models.Model):
     # }
     
     # Field-specific edit distances
-    field_edit_distances = models.JSONField(
+    field_edit_distances = DictField(
         default=dict,
-        validators=[validate_field_edit_distances]
+        validation=validate_field_edit_distances
     )
     # Example structure:
     # {
@@ -312,9 +314,9 @@ class ReceiptTemplate(models.Model):
     # }
     
     # Usage statistics for template archiving decisions
-    recent_usage = models.JSONField(
+    recent_usage = DictField(
         default=dict,
-        validators=[validate_recent_usage]
+        validation=validate_recent_usage
     )
     # Example structure:
     # {
@@ -323,13 +325,14 @@ class ReceiptTemplate(models.Model):
     #    "usage_percentage": 41.6   # Percentage of merchant's templates uses (5/12 * 100)
     # }
     
-    class Meta:
-        db_table = 'receipt_templates'
-        indexes = [
-            models.Index(fields=['merchant_name']),
-            models.Index(fields=['is_archived']),
-            models.Index(fields=['last_used_at']),
+    meta = {
+        'collection': 'receipt_templates',
+        'indexes': [
+            'merchant_name',
+            'is_archived',
+            'last_used_at'
         ]
+    }
     
     def __str__(self):
         status = "Archived" if self.is_archived else "Active"
@@ -340,9 +343,10 @@ class ReceiptTemplate(models.Model):
         Update usage statistics when template is used
         """
         now = timezone.now()
+        # With mongoengine directly, we modify attributes and save
         self.last_used_at = now
         self.usage_count += 1
-        self.save(update_fields=['last_used_at', 'usage_count'])
+        self.save()
     
     def calculate_updated_accuracy(self, field_name, current_result):
         """
@@ -376,26 +380,29 @@ class ReceiptTemplate(models.Model):
         # Calculate percentage of merchant's template uses
         usage_percentage = (last_30_days_uses / total_merchant_uses * 100) if total_merchant_uses > 0 else 0
         
+        # Update the field and save
         self.recent_usage = {
             "last_30_days": last_30_days_uses,
             "total_merchant_uses": total_merchant_uses,
             "usage_percentage": usage_percentage
         }
-        self.save(update_fields=['recent_usage'])
+        
+        self.save()
     
     def archive(self):
         """Archive this template"""
         if not self.is_archived:
+            now = timezone.now()
             self.is_archived = True
-            self.archived_at = timezone.now()
-            self.save(update_fields=['is_archived', 'archived_at'])
+            self.archived_at = now
+            self.save()
     
     def unarchive(self):
         """Unarchive this template"""
         if self.is_archived:
             self.is_archived = False
             self.archived_at = None
-            self.save(update_fields=['is_archived', 'archived_at'])
+            self.save()
             
     def calculate_edit_distance(self, str1: Optional[str], str2: Optional[str]) -> int:
         """
