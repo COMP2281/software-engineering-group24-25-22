@@ -42,28 +42,22 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
+    # Minimal set of apps for a lightweight parser service
+    'django.contrib.contenttypes',  # Keep this as some core functionality depends on it
+    'django.contrib.auth',          # Required by rest_framework_simplejwt
     'apps.jobs',
     'apps.optics',
     'rest_framework',
     'rest_framework_simplejwt'
-
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
+    # Removed CSRF middleware as it's not needed for API-only service
+    'django.contrib.auth.middleware.AuthenticationMiddleware',  # Required for JWT auth
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'apps.jobs.views.APIKeyAuthentication',  # Add API key authentication middleware
+    'apps.jobs.views.APIKeyAuthentication',  # API key authentication middleware
 ]
 
 # Celery Configuration
@@ -110,8 +104,6 @@ TEMPLATES = [
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
             ],
         },
     },
@@ -161,23 +153,8 @@ DATABASES = {
 }
 
 
-# Password validation
-# https://docs.djangoproject.com/en/4.1/ref/settings/#auth-password-validators
-
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
+# Password validation - not needed for lightweight parser service
+AUTH_PASSWORD_VALIDATORS = []
 
 
 # Internationalization
