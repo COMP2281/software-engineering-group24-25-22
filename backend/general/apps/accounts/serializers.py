@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from common.serializers import DocumentSerializer
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import User, EmployeeProfile, ExpenseSettings, BlacklistedToken
@@ -6,23 +7,7 @@ from datetime import datetime
 import jwt
 
 # Base serializer for MongoEngine documents
-class MongoEngineModelSerializer(serializers.Serializer):
-    """Base serializer for MongoEngine documents"""
-    
-    def create(self, validated_data):
-        """Create a new instance from validated data"""
-        instance = self.Meta.model(**validated_data)
-        instance.save()
-        return instance
-    
-    def update(self, instance, validated_data):
-        """Update an existing instance with validated data"""
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        return instance
-
-class UserRegistrationSerializer(MongoEngineModelSerializer):
+class UserRegistrationSerializer(DocumentSerializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
@@ -88,14 +73,14 @@ class UserRegistrationSerializer(MongoEngineModelSerializer):
         
         return user
 
-class UserProfileSerializer(MongoEngineModelSerializer):
+class UserProfileSerializer(DocumentSerializer):
     id = serializers.CharField(read_only=True)
     
     class Meta:
         model = EmployeeProfile
         fields = ('id', 'employee_id', 'first_name', 'last_name', 'department', 'position')
 
-class UserDetailsSerializer(MongoEngineModelSerializer):
+class UserDetailsSerializer(DocumentSerializer):
     id = serializers.CharField(read_only=True)
     profile = serializers.SerializerMethodField()
     
@@ -111,7 +96,7 @@ class UserDetailsSerializer(MongoEngineModelSerializer):
         except Exception:
             return None
 
-class EmployeeProfileSerializer(MongoEngineModelSerializer):
+class EmployeeProfileSerializer(DocumentSerializer):
     id = serializers.CharField(read_only=True)
     user = serializers.CharField()
     manager = serializers.CharField(required=False, allow_null=True, allow_blank=True)
@@ -143,7 +128,7 @@ class EmployeeProfileSerializer(MongoEngineModelSerializer):
         except EmployeeProfile.DoesNotExist:
             raise serializers.ValidationError("Invalid manager ID")
 
-class ExpenseSettingsSerializer(MongoEngineModelSerializer):
+class ExpenseSettingsSerializer(DocumentSerializer):
     id = serializers.CharField(read_only=True)
     user = serializers.CharField()
     expense_approver = serializers.CharField(required=False, allow_null=True)

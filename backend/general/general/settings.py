@@ -15,6 +15,9 @@ import django_stubs_ext
 from urllib import parse
 from datetime import timedelta
 from os import path
+import sys
+import os
+
 
 django_stubs_ext.monkeypatch()
 
@@ -22,6 +25,8 @@ django_stubs_ext.monkeypatch()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 mongodb_socket = parse.quote_plus(path.join('server', 'db',  'general.sock'))
+
+sys.path.append(str(BASE_DIR.parent))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
