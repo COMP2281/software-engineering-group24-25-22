@@ -2,12 +2,8 @@
 Custom authentication backend for MongoEngine User model
 """
 from django.contrib.auth.backends import BaseBackend
-from django.contrib.auth.models import AnonymousUser
-from django.conf import settings
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework.authentication import get_authorization_header
-from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed, TokenError
-from rest_framework import HTTP_HEADER_ENCODING
+from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed
 
 from .models import User, BlacklistedToken
 
