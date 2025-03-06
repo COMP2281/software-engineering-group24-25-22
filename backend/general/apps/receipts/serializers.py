@@ -65,6 +65,33 @@ class ReceiptSerializer(ReceiptDocumentSerializer):
     
     class Meta:
         model = Receipt
+
+    def validate(self, data):
+        """Validate that receipts have required file-related fields."""
+        # First apply the standard model validation
+        data = super().validate(data)
+
+        # For new receipt creation (not updates)
+        if self.instance is None:
+            # Check for required file fields
+            file_fields = ['file_id', 'original_filename', 'file_type']
+            missing_fields = [field for field in file_fields if not data.get(field)]
+
+            if missing_fields:
+                raise serializers.ValidationError({
+                    'file_error': 'Receipt requires a file attachment. ' +
+                                 f'Missing required fields: {", ".join(missing_fields)}',
+                    'missing_fields': missing_fields
+                })
+
+            # Optional: Additional file type validation
+            valid_file_types = ['pdf', 'jpg', 'jpeg', 'png', 'tiff']
+            if data.get('file_type') and data['file_type'].lower() not in valid_file_types:
+                raise serializers.ValidationError({
+                    'file_type': f'File type must be one of: {", ".join(valid_file_types)}'
+                })
+
+        return data
     
     def custom_representation(self, instance, data):
         """Add cost items to the representation"""
