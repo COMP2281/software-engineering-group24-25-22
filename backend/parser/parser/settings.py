@@ -10,6 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.1/ref/settings/
 """
 
+import mongoengine
+from celery.schedules import crontab
 from pathlib import Path
 import django_stubs_ext
 from urllib import parse
@@ -19,7 +21,8 @@ from os import path
 
 django_stubs_ext.monkeypatch()
 
-mongodb_socket = parse.quote_plus(path.join('../', 'general', 'server', 'db',  'general.sock'))
+mongodb_socket = parse.quote_plus(
+    path.join('../', 'general', 'server', 'db',  'general.sock'))
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -43,6 +46,7 @@ ALLOWED_HOSTS = []
 
 INSTALLED_APPS = [
     # Minimal set of apps for a lightweight parser service
+    'django.contrib.sessions',          # Required by rest_framework_simplejwt
     'django.contrib.contenttypes',  # Keep this as some core functionality depends on it
     'django.contrib.auth',          # Required by rest_framework_simplejwt
     'apps.jobs',
@@ -52,6 +56,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.middleware.common.CommonMiddleware',
     # Removed CSRF middleware as it's not needed for API-only service
@@ -73,7 +78,6 @@ CELERY_WORKER_CONCURRENCY = 3  # Limit to 3 concurrent jobs
 CELERY_TASK_ACKS_LATE = True  # Ensure tasks aren't lost on worker crash
 
 # Celery Beat Schedule
-from celery.schedules import crontab
 
 CELERY_BEAT_SCHEDULE = {
     'template-maintenance-daily': {
@@ -88,7 +92,8 @@ CELERY_BEAT_SCHEDULE = {
     },
     'old-job-cleanup-weekly': {
         'task': 'apps.jobs.tasks.cleanup_old_jobs',
-        'schedule': crontab(hour='1', minute='0', day_of_week='1'),  # Run at 1:00 AM every Monday
+        # Run at 1:00 AM every Monday
+        'schedule': crontab(hour='1', minute='0', day_of_week='1'),
         'options': {'expires': 60 * 60 * 24},  # Expire after 24 hours
     },
 }
@@ -135,7 +140,6 @@ SIMPLE_JWT = {
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
 
-import mongoengine
 
 # Connect to MongoDB
 mongoengine.connect(

@@ -285,6 +285,8 @@ class MongoDBAdmin(admin.ModelAdmin):
         # Get basic admin data
         app_label = self.model._meta.app_label
         model_name = self.model._meta.model_name
+
+        print(model_name)
         
         # Get the object
         obj = self.get_object(request, object_id)
