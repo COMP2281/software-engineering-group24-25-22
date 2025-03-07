@@ -1,10 +1,9 @@
 import React from 'react'
 import { LoginInputFields } from '../component/login_input_fields';
-
-
+import { LoginButton } from '../component/buttons/login_button';
 
 const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
-    let accessToken = localStorage.getItem('accessToken');
+    const accessToken = localStorage.getItem('accessToken');
 
     // Set up headers with authorization
     let headers: HeadersInit = {
@@ -76,8 +75,14 @@ const redirectToLogin = () => {
 
 export function Login() {
     return (
-        <div className='w-full h-screen items-center align-middle '> 
-            <LoginInputFields/>
+        <div className="w-full h-screen flex items-center justify-center bg-gray-100">
+            <div className="bg-white p-10 rounded-2xl shadow-lg w-[28rem] flex flex-col items-center">
+                <h2 className="text-3xl font-semibold mb-6">Login</h2>
+                <div className="w-full">
+                    <LoginInputFields />
+                </div>
+                <LoginButton className="w-full mt-4" />
+            </div>
         </div>
     );
 }
