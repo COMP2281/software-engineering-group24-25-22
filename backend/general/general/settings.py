@@ -28,6 +28,9 @@ mongodb_socket = parse.quote_plus(path.join('server', 'db',  'general.sock'))
 
 sys.path.append(str(BASE_DIR.parent))
 
+# Temp upload directory for job processing (used by parser service)
+TEMP_UPLOAD_DIR = os.path.join(BASE_DIR.parent, 'parser', 'server', 'tmp_uploads')
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
 

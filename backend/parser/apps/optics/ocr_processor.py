@@ -47,39 +47,66 @@ class OCRProcessor:
         Returns:
             dict: Extracted data from the receipt
         """
-        try:
-            # If using a job, get file details from there
-            if self.job:
-                file_path = self.job.uploaded_file.path
-                file_type = self.job.file_type.lower()
-            elif not file_path or not file_type:
-                raise OCRProcessorError("Either job or file_path and file_type must be provided")
-            else:
-                file_type = file_type.lower()
-            
-            # Process based on file type
-            if 'image' in file_type:
-                result = self._process_image(file_path)
-            elif 'pdf' in file_type:
-                result = self._process_pdf(file_path)
-            elif 'json' in file_type:
-                result = self._process_json(file_path)
-            else:
-                raise OCRProcessorError(f"Unsupported file type: {file_type}")
-            
-            # Store results in job if available
-            if self.job:
-                self.job.processed_data = result
-                self.job.save()
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"Error processing file: {str(e)}")
-            if self.job:
-                self.job.error_message = str(e)
-                self.job.save()
-            raise OCRProcessorError(f"Processing failed: {str(e)}")
+        print(self.job)
+        print(self.job.uploaded_file_path)
+        print(self.job.file_type)
+        if self.job:
+            file_path = self.job.uploaded_file.path
+            file_type = self.job.file_type.lower()
+        elif not file_path or not file_type:
+            raise OCRProcessorError("Either job or file_path and file_type must be provided")
+        else:
+            file_type = file_type.lower()
+        
+        # Process based on file type
+        if 'image' in file_type:
+            result = self._process_image(file_path)
+        elif 'pdf' in file_type:
+            result = self._process_pdf(file_path)
+        elif 'json' in file_type:
+            result = self._process_json(file_path)
+        else:
+            raise OCRProcessorError(f"Unsupported file type: {file_type}")
+        
+        # Store results in job if available
+        if self.job:
+            self.job.processed_data = result
+            self.job.save()
+        
+        return result
+        # try:
+        #     # If using a job, get file details from there
+        #     if self.job:
+        #         file_path = self.job.uploaded_file.path
+        #         file_type = self.job.file_type.lower()
+        #     elif not file_path or not file_type:
+        #         raise OCRProcessorError("Either job or file_path and file_type must be provided")
+        #     else:
+        #         file_type = file_type.lower()
+        #
+        #     # Process based on file type
+        #     if 'image' in file_type:
+        #         result = self._process_image(file_path)
+        #     elif 'pdf' in file_type:
+        #         result = self._process_pdf(file_path)
+        #     elif 'json' in file_type:
+        #         result = self._process_json(file_path)
+        #     else:
+        #         raise OCRProcessorError(f"Unsupported file type: {file_type}")
+        #
+        #     # Store results in job if available
+        #     if self.job:
+        #         self.job.processed_data = result
+        #         self.job.save()
+        #
+        #     return result
+        #
+        # except Exception as e:
+        #     logger.error(f"Error processing file: {e}")
+        #     if self.job:
+        #         self.job.error_message = str(e)
+        #         self.job.save()
+        #     raise OCRProcessorError(f"Processing failed: {str(e)}")
     
     def _process_image(self, image_path):
         """
