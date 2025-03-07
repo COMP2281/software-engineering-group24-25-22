@@ -70,6 +70,10 @@ class UploadReceiptView(APIView):
                 {'error': 'User ID is required in metadata'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        print(file_obj.name)
+        print(metadata.get("content_type", file_obj.content_type))
+        print(user_id)
             
         # Create a new processing job
         job = ProcessingJob(

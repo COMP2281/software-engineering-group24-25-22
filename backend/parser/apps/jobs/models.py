@@ -8,8 +8,8 @@ from django.conf import settings
 
 def job_directory_path(instance, filename):
     """Generate file path for job files"""
-    # File will be uploaded to TEMP_UPLOAD_DIR/jobs/<job_id>/<filename>
-    return f'jobs/{instance.job_id}/{filename}'
+    # File will be uploaded to TEMP_UPLOAD_DIR/jobs/<id>/<filename>
+    return f'jobs/{instance.id}/{filename}'
 
 class ProcessingJob(Document):
     """Model for tracking OCR processing jobs"""
@@ -23,7 +23,7 @@ class ProcessingJob(Document):
         ('discarded', 'Discarded'),  # User discarded the job
     )
     
-    job_id = UUIDField(primary_key=True, default=uuid.uuid4)
+    id = UUIDField(primary_key=True, default=uuid.uuid4)
     user_id = StringField(help_text="ID of the user who initiated the job")
     status = StringField(max_length=20, choices=STATUS_CHOICES, default='pending')
     original_filename = StringField(max_length=255)
@@ -67,7 +67,7 @@ class ProcessingJob(Document):
     }
     
     def __str__(self):
-        return f"Job {self.job_id} - {self.status}"
+        return f"Job {self.id} - {self.status}"
     
     @property
     def duration(self):
@@ -82,7 +82,7 @@ class ProcessingJob(Document):
     @property
     def temporary_directory(self):
         """Get the temporary directory path for this job"""
-        return Path(settings.TEMP_UPLOAD_DIR) / str(self.job_id)
+        return Path(settings.TEMP_UPLOAD_DIR) / str(self.id)
     
     def update_status(self, new_status, error_message=None):
         """Update job status and related fields"""
