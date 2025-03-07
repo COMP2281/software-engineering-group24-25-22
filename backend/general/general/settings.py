@@ -15,6 +15,9 @@ import django_stubs_ext
 from urllib import parse
 from datetime import timedelta
 from os import path
+import sys
+import os
+
 
 django_stubs_ext.monkeypatch()
 
@@ -22,6 +25,8 @@ django_stubs_ext.monkeypatch()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 mongodb_socket = parse.quote_plus(path.join('server', 'db',  'general.sock'))
+
+sys.path.append(str(BASE_DIR.parent))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
@@ -93,8 +98,8 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': False,  # We're handling blacklisting manually
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,  # We're handling blacklisting manually
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
     'VERIFYING_KEY': None,
