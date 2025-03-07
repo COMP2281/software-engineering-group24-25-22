@@ -1,0 +1,58 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <div class="module" id="changelist">
+    <div class="changelist-form-container">
+      <div class="results">
+        <table id="result_list">
+          <thead>
+            <tr>
+              {% for field_name in cl.result_headers %}
+                <th scope="col" class="column-{{ field_name }}">
+                  {% if field_name == 'get_id' %}
+                    ID
+                  {% elif field_name == 'get_display_data' %}
+                    Data
+                  {% else %}
+                    {{ field_name }}
+                  {% endif %}
+                </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in data_rows %}
+              <tr class="{% cycle 'row1' 'row2' %}">
+                {% for field_name in cl.result_headers %}
+                  <td class="field-{{ field_name }}">
+                    {{ row|get_item:field_name|safe }}
+                  </td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" type="text/css" href="{% url 'admin:jsi18n' %}">
+<style>
+.column-get_display_data pre {
+  max-height: 100px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+</style>
+{% endblock %}
+
+<!-- Custom template filter to access dictionary by key -->
+{% load mongodb_tags %}

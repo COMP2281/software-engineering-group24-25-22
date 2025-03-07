@@ -1,0 +1,20 @@
+  {
+    "include": [
+      "general",
+      "parser"
+    ],
+    "exclude": [
+      "**/node_modules",
+      "**/__pycache__",
+      "**/.venv"
+    ],
+    "venvPath": ".",
+    "venv": ".env",
+    "reportMissingImports": true,
+    "reportMissingTypeStubs": false,
+    "pythonVersion": "3.10",
+    "typeCheckingMode": "basic",
+    "stubPath": "typings",
+    "extraPaths": [],
+    "useLibraryCodeForTypes": true
+  }
