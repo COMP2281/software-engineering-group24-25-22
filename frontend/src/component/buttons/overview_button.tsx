@@ -3,7 +3,7 @@ import Button from '@mui/material/Button';
 
 export function OverviewButton() {
     const handleClick = () => {
-        window.location.hash = 'overview';
+        window.location.hash = 'overview'
     };
 
     return (
