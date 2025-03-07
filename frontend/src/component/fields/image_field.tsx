@@ -13,7 +13,7 @@ interface BoxBaseProps {
 export function ImageField({ image, progress }: BoxBaseProps) {
     const imagePath = image ? `/items/${image}` : null;
 
-    return (
+    return (                                                                
         <div className="w-full h-full">
             <div className="flex flex-col ">
                 <div className="w-full flex flex-col justify-center items-center">
