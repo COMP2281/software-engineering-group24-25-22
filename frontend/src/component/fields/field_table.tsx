@@ -37,7 +37,7 @@ export function FieldTable({ setFieldValues }: FieldTableProps) {
         "Time",
         "Address",
         "Ref",
-        "Cost List",
+        "Total Cost",
         "Description (Manual)",
         "Tax",
         "Category (Manual)"
