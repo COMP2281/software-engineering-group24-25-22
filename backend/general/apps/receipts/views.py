@@ -25,7 +25,23 @@ class ReceiptViewSet(viewsets.ModelViewSet):
         This view returns a list of all receipts for the currently authenticated user.
         """
         # mongoengine syntax for querying
-        return Receipt.objects(employee=self.request.user)
+        queryset = Receipt.objects(employee=self.request.user)
+        queryset.model = Receipt
+        return queryset
+
+    def get_object(self):
+        """Override get_object to handle permissions properly"""
+        # Get the object ID from the URL
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        obj_id = self.kwargs[lookup_url_kwarg]
+
+        # Get the specific object
+        obj = Receipt.objects.get(id=obj_id)
+
+        # Check permissions
+        self.check_object_permissions(self.request, obj)
+
+        return obj
 
     def perform_create(self, serializer):
         """
