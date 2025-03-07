@@ -1,27 +1,13 @@
 from rest_framework import serializers
+from common.serializers import DocumentSerializer
 from django.contrib.auth.password_validation import validate_password
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import User, EmployeeProfile, ExpenseSettings, BlacklistedToken
+from datetime import datetime
 import jwt
 
 # Base serializer for MongoEngine documents
-class MongoEngineModelSerializer(serializers.Serializer):
-    """Base serializer for MongoEngine documents"""
-    
-    def create(self, validated_data):
-        """Create a new instance from validated data"""
-        instance = self.Meta.model(**validated_data)
-        instance.save()
-        return instance
-    
-    def update(self, instance, validated_data):
-        """Update an existing instance with validated data"""
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        return instance
-
-class UserRegistrationSerializer(MongoEngineModelSerializer):
+class UserRegistrationSerializer(DocumentSerializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True, required=True)
@@ -41,7 +27,6 @@ class UserRegistrationSerializer(MongoEngineModelSerializer):
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
             raise serializers.ValidationError({"password": "Password fields didn't match."})
-            
         # Validate manager if provided
         manager = attrs.get('manager')
         if manager and manager.strip():
@@ -52,7 +37,7 @@ class UserRegistrationSerializer(MongoEngineModelSerializer):
                     raise serializers.ValidationError({"manager": "Manager not found"})
             except Exception:
                 raise serializers.ValidationError({"manager": "Invalid manager ID"})
-                
+
         return attrs
     
     def create(self, validated_data):
@@ -88,14 +73,14 @@ class UserRegistrationSerializer(MongoEngineModelSerializer):
         
         return user
 
-class UserProfileSerializer(MongoEngineModelSerializer):
+class UserProfileSerializer(DocumentSerializer):
     id = serializers.CharField(read_only=True)
     
     class Meta:
         model = EmployeeProfile
         fields = ('id', 'employee_id', 'first_name', 'last_name', 'department', 'position')
 
-class UserDetailsSerializer(MongoEngineModelSerializer):
+class UserDetailsSerializer(DocumentSerializer):
     id = serializers.CharField(read_only=True)
     profile = serializers.SerializerMethodField()
     
@@ -111,10 +96,17 @@ class UserDetailsSerializer(MongoEngineModelSerializer):
         except Exception:
             return None
 
-class EmployeeProfileSerializer(MongoEngineModelSerializer):
+class EmployeeProfileSerializer(DocumentSerializer):
     id = serializers.CharField(read_only=True)
     user = serializers.CharField()
-    manager = serializers.CharField(required=False, allow_null=True)
+    manager = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    
+    # Add explicit fields for all profile attributes
+    employee_id = serializers.CharField(read_only=True)
+    first_name = serializers.CharField(required=False)
+    last_name = serializers.CharField(required=False)
+    department = serializers.CharField(required=False)
+    position = serializers.CharField(required=False)
     
     class Meta:
         model = EmployeeProfile
@@ -128,7 +120,7 @@ class EmployeeProfileSerializer(MongoEngineModelSerializer):
             raise serializers.ValidationError("Invalid user ID")
     
     def validate_manager(self, value):
-        if not value:
+        if not value or value == '':
             return None
         
         try:
@@ -136,7 +128,7 @@ class EmployeeProfileSerializer(MongoEngineModelSerializer):
         except EmployeeProfile.DoesNotExist:
             raise serializers.ValidationError("Invalid manager ID")
 
-class ExpenseSettingsSerializer(MongoEngineModelSerializer):
+class ExpenseSettingsSerializer(DocumentSerializer):
     id = serializers.CharField(read_only=True)
     user = serializers.CharField()
     expense_approver = serializers.CharField(required=False, allow_null=True)
@@ -246,11 +238,42 @@ class CustomTokenRefreshSerializer(serializers.Serializer):
             if not user:
                 raise serializers.ValidationError('User not found')
             
-            # Return refresh and access tokens
-            return {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token)
-            }
+            # Get settings for token rotation
+            from django.conf import settings
+            
+            # Check if we should rotate refresh tokens
+            if settings.SIMPLE_JWT.get('ROTATE_REFRESH_TOKENS', False):
+                # If rotation is enabled, blacklist the current token if required
+                if settings.SIMPLE_JWT.get('BLACKLIST_AFTER_ROTATION', False):
+                    try:
+                        BlacklistedToken.objects.create(
+                            token_jti=jti,
+                            user_id=user_id,
+                            expires_at=datetime.fromtimestamp(decoded.get('exp', 0))
+                        )
+                    except Exception as e:
+                        # Log the error but continue
+                        print(f"Error blacklisting token: {str(e)}")
+                
+                # Create a new refresh token
+                new_refresh = RefreshToken.for_user(user)
+                
+                # Preserve any custom claims from the old token
+                for key, value in refresh.payload.items():
+                    if key not in ['exp', 'iat', 'jti']:  # Skip standard claims that are auto-set
+                        new_refresh[key] = value
+                
+                # Return new refresh and access tokens
+                return {
+                    'refresh': str(new_refresh),
+                    'access': str(new_refresh.access_token)
+                }
+            else:
+                # If rotation is disabled, return original refresh token
+                return {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token)
+                }
         except TokenError as e:
             raise serializers.ValidationError(str(e))
         except Exception as e:

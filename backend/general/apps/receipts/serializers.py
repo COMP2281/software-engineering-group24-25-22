@@ -1,24 +1,14 @@
 from rest_framework import serializers
+from common.serializers import DocumentSerializer
 from .models import Receipt, CostItem
 
-# Custom DocumentSerializer for MongoEngine Documents 
-class DocumentSerializer(serializers.Serializer):
+# Custom ReceiptDocumentSerializer for MongoEngine Documents 
+class ReceiptDocumentSerializer(DocumentSerializer):
     """
     Base serializer for MongoEngine documents that makes them 
     compatible with DRF.
     """
     id = serializers.CharField(read_only=True)
-    
-    def create(self, validated_data):
-        instance = self.Meta.model(**validated_data)
-        instance.save()
-        return instance
-        
-    def update(self, instance, validated_data):
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        return instance
         
     def to_representation(self, instance):
         """
@@ -46,7 +36,7 @@ class DocumentSerializer(serializers.Serializer):
         return data
 
 # Model Serializers 
-class CostItemSerializer(DocumentSerializer):
+class CostItemSerializer(ReceiptDocumentSerializer):
     item_name = serializers.CharField()
     unit_price = serializers.DecimalField(max_digits=10, decimal_places=2)
     quantity = serializers.DecimalField(max_digits=10, decimal_places=2)
@@ -55,7 +45,7 @@ class CostItemSerializer(DocumentSerializer):
     class Meta:
         model = CostItem
 
-class ReceiptSerializer(DocumentSerializer):
+class ReceiptSerializer(ReceiptDocumentSerializer):
     merchant_name = serializers.CharField()
     transaction_time = serializers.DateTimeField()
     merchant_address = serializers.CharField(required=False, allow_null=True, allow_blank=True)
@@ -75,6 +65,33 @@ class ReceiptSerializer(DocumentSerializer):
     
     class Meta:
         model = Receipt
+
+    def validate(self, data):
+        """Validate that receipts have required file-related fields."""
+        # First apply the standard model validation
+        data = super().validate(data)
+
+        # For new receipt creation (not updates)
+        if self.instance is None:
+            # Check for required file fields
+            file_fields = ['file_id', 'original_filename', 'file_type']
+            missing_fields = [field for field in file_fields if not data.get(field)]
+
+            if missing_fields:
+                raise serializers.ValidationError({
+                    'file_error': 'Receipt requires a file attachment. ' +
+                                 f'Missing required fields: {", ".join(missing_fields)}',
+                    'missing_fields': missing_fields
+                })
+
+            # Optional: Additional file type validation
+            valid_file_types = ['pdf', 'jpg', 'jpeg', 'png', 'tiff']
+            if data.get('file_type') and data['file_type'].lower() not in valid_file_types:
+                raise serializers.ValidationError({
+                    'file_type': f'File type must be one of: {", ".join(valid_file_types)}'
+                })
+
+        return data
     
     def custom_representation(self, instance, data):
         """Add cost items to the representation"""

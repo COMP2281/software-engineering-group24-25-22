@@ -50,9 +50,9 @@ class Receipt(Document):
     
     # File metadata
     upload_date = DateTimeField(default=timezone.now)
-    original_filename = StringField(max_length=255, required=False)
-    file_type = StringField(max_length=10, required=False)  # PDF, JPG, etc.
-    file_id = StringField(max_length=50, required=False)    # GridFS ID reference
+    original_filename = StringField(max_length=255, required=True)
+    file_type = StringField(max_length=10, required=True)  # PDF, JPG, etc.
+    file_id = StringField(max_length=50, required=True)    # GridFS ID reference
     
     # OCR processing details
     ocr_confidence = FloatField(default=0.0)  # 0-100
