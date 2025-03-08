@@ -9,6 +9,7 @@ from django.conf import settings
 from django.http import Http404
 from django.utils import timezone
 from typing import Dict, Any
+from .utils import temp_file_path
 
 from .models import ProcessingJob
 
@@ -38,9 +39,9 @@ class APIKeyAuthentication:
                 
         return self.get_response(request)
 
-class UploadReceiptView(APIView):
+class ParseReceiptView(APIView):
     """
-    API endpoint for uploading receipts for processing
+    API endpoint for parsing receipts (blocking until processing completes)
     """
     parser_classes = (MultiPartParser, FormParser)
     
@@ -52,7 +53,7 @@ class UploadReceiptView(APIView):
             )
         
         file_obj = request.FILES['file']
-        
+
         # Parse metadata from header
         metadata = {}
         if 'X-Receipt-Metadata' in request.headers:
@@ -63,43 +64,98 @@ class UploadReceiptView(APIView):
                     {'error': 'Invalid metadata format'}, 
                     status=status.HTTP_400_BAD_REQUEST
                 )
-                
-        user_id = metadata.get('user_id')
+        
+        # Extract user_id from JWT token if available
+        user_id = None
+        
+        # Check Authorization header for JWT token
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            import jwt
+            from django.conf import settings
+            
+            token = auth_header.split(' ')[1]
+            try:
+                # Verify the token and extract user_id in one step
+                decoded_token = jwt.decode(
+                    token,
+                    settings.SECRET_KEY,
+                    algorithms=['HS256']
+                )
+                user_id = decoded_token.get('user_id')
+                if user_id:
+                    logger.info(f"Authenticated request with JWT for user_id: {user_id}")
+            except jwt.InvalidTokenError as e:
+                logger.warning(f"Invalid JWT token: {str(e)}")
+            except Exception as e:
+                logger.warning(f"Failed to decode JWT token: {str(e)}")
+
+        # Fallback to metadata if JWT extraction failed
+        if not user_id:
+            user_id = metadata.get('user_id')
+        
         if not user_id:
             return Response(
-                {'error': 'User ID is required in metadata'}, 
+                {'error': 'User ID is required in either JWT token or metadata'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        print(file_obj.name)
-        print(metadata.get("content_type", file_obj.content_type))
-        print(user_id)
             
         # Create a new processing job
         job = ProcessingJob(
             user_id=user_id,
             original_filename=metadata.get('original_filename', file_obj.name),
             file_type=metadata.get('content_type', file_obj.content_type),
-            uploaded_file=file_obj,
             metadata=metadata,
             status='pending'
         )
+
+        # Add expiration time (4 hours from now) for temporary file
+        if not job.metadata:
+            job.metadata = {}
+        job.metadata['temp_expiration'] = (timezone.now() + timezone.timedelta(hours=4)).isoformat()
         job.save()
-        
-        # Queue job for asynchronous processing
+
+        with open(temp_file_path(job, file_obj.name), "wb") as tmp:
+            for chunk in file_obj.chunks():
+                tmp.write(chunk)
+
+        # Process receipt using Celery task but wait for completion
         from apps.optics.tasks import process_receipt_ocr
         try:
-            # Direct function call since it's a shared_task function
-            task_result = process_receipt_ocr(str(job.id))
+            import time
+            from celery.result import AsyncResult
             
-            # Update job status directly since we called the task synchronously
-            job.update_status('completed')  # The task will have already completed
+            # Start the task
+            start_time = time.time()
+            task = process_receipt_ocr(str(job.id))
             
-            # Return job ID
+            # Wait for task completion (with 5-minute timeout)
+            try:
+                # This will block until the task completes or times out
+                task_result = task.get(timeout=300)  # 5 minutes
+            except Exception as e:
+                # Handle timeout or other task exceptions
+                job.update_status('failed', error_message=f"Processing failed or timed out: {str(e)}")
+                return Response(
+                    {'error': 'Processing timed out or failed'}, 
+                    status=status.HTTP_408_REQUEST_TIMEOUT
+                )
+                
+            # Refresh job from database to get latest state
+            job = ProcessingJob.objects.get(id=job.id)
+            
+            # Calculate processing time
+            processing_time = time.time() - start_time
+            
+            # Return job data immediately
             return Response({
                 'id': str(job.id),
-                'status': job.status
-            }, status=status.HTTP_202_ACCEPTED)
+                'status': job.status,
+                'processed_data': job.processed_data,
+                'ocr_confidence': job.ocr_confidence,
+                'needs_review': job.needs_review,
+                'processing_time': processing_time
+            }, status=status.HTTP_200_OK)
             
         except Exception as e:
             # Handle processing error
@@ -122,6 +178,36 @@ class JobStatusView(APIView):
     
     def get(self, request, id):
         job = self.get_object(id)
+        
+        # Extract user_id from JWT token if available and verify ownership
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            import jwt
+            from django.conf import settings
+            
+            token = auth_header.split(' ')[1]
+            try:
+                # Verify the token and extract user_id in one step
+                decoded_token = jwt.decode(
+                    token,
+                    settings.SECRET_KEY,
+                    algorithms=['HS256']
+                )
+                user_id = decoded_token.get('user_id')
+                
+                # Verify the user owns this job
+                if user_id and str(job.user_id) != str(user_id):
+                    return Response(
+                        {'error': 'User ID does not match job owner'}, 
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                    
+                if user_id:
+                    logger.info(f"Authenticated request with JWT for job status: {id}")
+            except jwt.InvalidTokenError as e:
+                logger.warning(f"Invalid JWT token for job status: {str(e)}")
+            except Exception as e:
+                logger.warning(f"Failed to decode JWT token: {str(e)}")
         
         response_data = {
             'id': str(job.id),
@@ -163,22 +249,85 @@ class ConfirmJobView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Verify user ID matches
-        request_data = json.loads(request.body)
-        user_id = request_data.get('user_id')
+        # Extract user_id from JWT token if available
+        user_id = None
+        auth_header = request.headers.get('Authorization')
         
-        if str(job.user_id) != str(user_id):
+        if auth_header and auth_header.startswith('Bearer '):
+            import jwt
+            from django.conf import settings
+            
+            token = auth_header.split(' ')[1]
+            try:
+                # Verify the token and extract user_id in one step
+                decoded_token = jwt.decode(
+                    token,
+                    settings.SECRET_KEY,
+                    algorithms=['HS256']
+                )
+                user_id = decoded_token.get('user_id')
+                if user_id:
+                    logger.info(f"Authenticated request with JWT for confirm job: {id}")
+            except jwt.InvalidTokenError as e:
+                logger.warning(f"Invalid JWT token for confirm job: {str(e)}")
+            except Exception as e:
+                logger.warning(f"Failed to decode JWT token: {str(e)}")
+                
+        # Fallback to request body
+        if not user_id:
+            try:
+                request_data = json.loads(request.body)
+                user_id = request_data.get('user_id')
+            except json.JSONDecodeError:
+                user_id = None
+        
+        # Verify user ID matches
+        if not user_id or str(job.user_id) != str(user_id):
             return Response(
                 {'error': 'User ID does not match job owner'}, 
                 status=status.HTTP_403_FORBIDDEN
             )
         
+        # Get any corrections from the request body
+        corrections = {}
+        try:
+            request_data = json.loads(request.body)
+            corrections = request_data.get('corrections', {})
+        except json.JSONDecodeError:
+            pass
+        
+        # Apply corrections to the processed data if provided
+        if corrections:
+            # Store original data for template feedback
+            original_data = job.processed_data.copy() if job.processed_data else {}
+            
+            # Update the processed data with corrections
+            processed_data = {} if job.processed_data is None else dict(job.processed_data)
+            
+            # Apply corrections
+            for key, value in corrections.items():
+                if value is not None:  # Only update fields that were provided
+                    processed_data[key] = value
+            
+            # Save the updated job data
+            job.processed_data = processed_data
+            job.save()
+            
+            # Process template improvements with the corrections
+            self.process_template_improvements(job, original_data, corrections)
+        
         # Transfer to permanent storage and create records
         from .tasks import transfer_to_gridfs
         
-        # Queue file transfer to GridFS in the background
-        # Direct function call since it's a shared_task function
-        transfer_task = transfer_to_gridfs(str(job.id))
+        # Transfer file to GridFS
+        transfer_result = transfer_to_gridfs(str(job.id))
+        
+        # Check if transfer was successful
+        if transfer_result.get('status') != 'completed':
+            return Response(
+                {'error': f"Failed to transfer file to permanent storage: {transfer_result.get('error')}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
         # Update job with confirmation details
         if not hasattr(job, 'metadata') or job.metadata is None:
@@ -190,8 +339,75 @@ class ConfirmJobView(APIView):
         # Return the final receipt data
         return Response({
             'id': str(job.id),
+            'gridfs_id': job.gridfs_id,
             'receipt_data': job.processed_data
         })
+    
+    def process_template_improvements(self, job, original_data, corrections):
+        """Process template improvements based on user corrections"""
+        # Only proceed if there are corrections
+        if not corrections:
+            return
+            
+        try:
+            from django.core.cache import cache
+            from apps.optics.services import TemplateSuite
+            
+            cache_key = f"template_improvement_{job.id}"
+            
+            # Only proceed if we haven't processed this job's corrections already
+            if not cache.get(cache_key):
+                # Set flag to prevent duplicate processing
+                cache.set(cache_key, True, timeout=3600)  # 1 hour timeout
+                
+                # Get the original OCR text from job metadata or use a placeholder
+                ocr_text = job.metadata.get('ocr_text', 'No OCR text available')
+                
+                # Count corrected fields
+                corrected_fields = {}
+                for key, value in corrections.items():
+                    if key in original_data and original_data[key] != value:
+                        corrected_fields[key] = {
+                            'original': original_data[key],
+                            'corrected': value
+                        }
+                
+                # Log the correction details
+                logger.info(
+                    f"User corrected {len(corrected_fields)} fields for job {job.id}. "
+                    f"Sending corrections to template system."
+                )
+                
+                # Only proceed if there's a template to improve and corrections were made
+                if job.template_used and corrected_fields:
+                    # Convert to API format using the service helpers
+                    original_api_data = TemplateSuite.convert_to_api_format(original_data)
+                    
+                    # Ensure processed_data is not None
+                    processed_data = job.processed_data if job.processed_data is not None else {}
+                    
+                    # Corrected data in API format
+                    corrected_api_data = TemplateSuite.convert_to_api_format(processed_data)
+                    
+                    # Process the correction through TemplateSuite
+                    result = TemplateSuite.process_correction(
+                        ocr_text=ocr_text,
+                        template_id=job.template_used,
+                        original_data=original_api_data,
+                        corrected_data=corrected_api_data
+                    )
+                    
+                    # Check if the template was updated successfully
+                    if result.get('success'):
+                        logger.info(
+                            f"Template {result.get('template_action')} successfully: "
+                            f"{result.get('template_id')}"
+                        )
+                    else:
+                        logger.error(f"Template update failed: {result.get('error', 'Unknown error')}")
+                        
+        except Exception as e:
+            logger.error(f"Error during template improvement: {e}", exc_info=True)
 
 class DiscardJobView(APIView):
     """
@@ -205,6 +421,37 @@ class DiscardJobView(APIView):
     
     def delete(self, request, id):
         job = self.get_object(id)
+        
+        # Extract user_id from JWT token if available and verify ownership
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            import jwt
+            from django.conf import settings
+            
+            token = auth_header.split(' ')[1]
+            try:
+                # Verify the token and extract user_id in one step
+                decoded_token = jwt.decode(
+                    token,
+                    settings.SECRET_KEY,
+                    algorithms=['HS256']
+                )
+                user_id = decoded_token.get('user_id')
+                
+                # Verify the user owns this job
+                if user_id and str(job.user_id) != str(user_id):
+                    return Response(
+                        {'error': 'User ID does not match job owner'}, 
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                    
+                if user_id:
+                    logger.info(f"Authenticated request with JWT for discard job: {id}")
+            except jwt.InvalidTokenError as e:
+                logger.warning(f"Invalid JWT token for discard job: {str(e)}")
+                # Continue without user verification in this case
+            except Exception as e:
+                logger.warning(f"Failed to decode JWT token: {str(e)}")
         
         # Delete the uploaded file
         if job.uploaded_file:
@@ -223,6 +470,12 @@ class DiscardJobView(APIView):
                                 os.remove(file_path)
         except Exception as e:
             logger.warning(f"Failed to clean up job files: {str(e)}")
+        
+        # Update job with discard details
+        if not hasattr(job, 'metadata') or job.metadata is None:
+            job.metadata = {}
+        
+        job.metadata['discarded_at'] = timezone.now().isoformat()
         
         # Mark job as discarded (instead of deleting - for audit purposes)
         job.update_status('discarded')
@@ -248,6 +501,36 @@ class EditJobDataView(APIView):
                 {'error': 'Can only edit completed jobs'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+            
+        # Extract user_id from JWT token if available and verify ownership
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            import jwt
+            from django.conf import settings
+            
+            token = auth_header.split(' ')[1]
+            try:
+                # Verify the token and extract user_id in one step
+                decoded_token = jwt.decode(
+                    token,
+                    settings.SECRET_KEY,
+                    algorithms=['HS256']
+                )
+                user_id = decoded_token.get('user_id')
+                
+                # Verify the user owns this job
+                if user_id and str(job.user_id) != str(user_id):
+                    return Response(
+                        {'error': 'User ID does not match job owner'}, 
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                    
+                if user_id:
+                    logger.info(f"Authenticated request with JWT for edit job: {id}")
+            except jwt.InvalidTokenError as e:
+                logger.warning(f"Invalid JWT token for edit job: {str(e)}")
+            except Exception as e:
+                logger.warning(f"Failed to decode JWT token: {str(e)}")
         
         # Get the edited data (already validated by General Server)
         edited_data = json.loads(request.body)

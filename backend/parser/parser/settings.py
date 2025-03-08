@@ -18,11 +18,20 @@ from urllib import parse
 import os
 from datetime import timedelta
 from os import path
+import sys
 
 django_stubs_ext.monkeypatch()
 
-mongodb_socket = parse.quote_plus(
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+MONGODB_SOCKET = parse.quote_plus(
     path.join('../', 'general', 'server', 'db',  'general.sock'))
+
+sys.path.append(str(BASE_DIR.parent))
+
+sys.path.append(str(BASE_DIR))
+
+print(sys.path)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,7 +43,9 @@ TEMP_UPLOAD_DIR = os.path.join(BASE_DIR, 'server', 'tmp_uploads')
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-5i6pn3o7a%2k^fqd225!9-oe6twy0*%t38fju+c^jv$4%(i(t#'
+SECRET_KEY = 'django-insecure-oyajap)nc^ur#$v)67oj4p86=2sezj$5pwx$!f%e2gmu=xxjqr'
+
+# This must match the general server's SECRET_KEY for JWT verification to work
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -62,7 +73,7 @@ MIDDLEWARE = [
     # Removed CSRF middleware as it's not needed for API-only service
     'django.contrib.auth.middleware.AuthenticationMiddleware',  # Required for JWT auth
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'apps.jobs.views.APIKeyAuthentication',  # API key authentication middleware
+    # 'apps.jobs.views.APIKeyAuthentication',  # API key authentication middleware
 ]
 
 # Celery Configuration
@@ -116,11 +127,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'parser.wsgi.application'
 
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-}
+# REST_FRAMEWORK = {
+#     'DEFAULT_AUTHENTICATION_CLASSES': (
+#         'rest_framework_simplejwt.authentication.JWTAuthentication',
+#     ),
+# }
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
@@ -144,7 +155,7 @@ SIMPLE_JWT = {
 # Connect to MongoDB
 mongoengine.connect(
     db='receipt_scanner_db',
-    host='mongodb://'+mongodb_socket
+    host='mongodb://'+MONGODB_SOCKET
 )
 
 # Django still needs a database for its own functionality

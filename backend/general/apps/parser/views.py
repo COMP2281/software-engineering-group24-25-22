@@ -9,9 +9,9 @@ from .services import ParserService, ParserServiceError
 from .serializers import ReceiptUploadSerializer, ReceiptDataSerializer
 from .json_utils import MongoJSONEncoder
 
-class ReceiptUploadView(APIView):
+class ReceiptParseView(APIView):
     """
-    API endpoint for uploading receipts for processing
+    API endpoint for parsing receipts (blocking until processing completes)
     """
     parser_classes = (MultiPartParser, FormParser)
     permission_classes = [IsAuthenticated]
@@ -42,11 +42,21 @@ class ReceiptUploadView(APIView):
                 'department': request.user.profile.department,
                 'name': request.user.profile.full_name
             })
+        
+        # Get user's JWT token to forward to parser service
+        auth_header = request.headers.get('Authorization')
+        user_token = None
+        
+        if auth_header and auth_header.startswith('Bearer '):
+            user_token = auth_header.split(' ')[1]
             
         try:
             parser_service = ParserService()
-            result = parser_service.upload_receipt(file_obj, metadata)
-            return Response(result, status=status.HTTP_202_ACCEPTED)
+            # This will block until processing is complete
+            result = parser_service.parse_receipt(file_obj, metadata, user_token)
+            
+            # Return the complete processed data
+            return Response(result, status=status.HTTP_200_OK)
         except ParserServiceError as e:
             return Response(
                 {'error': str(e), 'detail': e.detail}, 
@@ -78,8 +88,23 @@ class ConfirmJobView(APIView):
     
     def post(self, request, job_id):
         try:
+            # Get corrections from request if any
+            corrections = request.data.get('corrections', None)
+            
+            # Get user's JWT token
+            auth_header = request.headers.get('Authorization')
+            user_token = None
+            
+            if auth_header and auth_header.startswith('Bearer '):
+                user_token = auth_header.split(' ')[1]
+                
             parser_service = ParserService()
-            result = parser_service.confirm_job(job_id, request.user.id)
+            result = parser_service.confirm_job(
+                job_id, 
+                request.user.id, 
+                corrections=corrections,
+                user_token=user_token
+            )
             
             # If confirmation successful, create a Receipt record in our database
             # (This would typically be done in a service layer)
@@ -112,8 +137,15 @@ class DiscardJobView(APIView):
     
     def delete(self, request, job_id):
         try:
+            # Get user's JWT token
+            auth_header = request.headers.get('Authorization')
+            user_token = None
+            
+            if auth_header and auth_header.startswith('Bearer '):
+                user_token = auth_header.split(' ')[1]
+                
             parser_service = ParserService()
-            parser_service.discard_job(job_id)
+            parser_service.discard_job(job_id, user_token=user_token)
             return Response({'success': True})
         except ParserServiceError as e:
             return Response(
@@ -135,6 +167,13 @@ class EditJobDataView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         try:
+            # Get user's JWT token
+            auth_header = request.headers.get('Authorization')
+            user_token = None
+            
+            if auth_header and auth_header.startswith('Bearer '):
+                user_token = auth_header.split(' ')[1]
+                
             parser_service = ParserService()
             # Convert Decimal values to floats to avoid JSON serialization issues
             from .json_utils import MongoJSONEncoder
@@ -144,7 +183,7 @@ class EditJobDataView(APIView):
             data_json = json.dumps(serializer.validated_data, cls=MongoJSONEncoder)
             serializable_data = json.loads(data_json)
             
-            result = parser_service.edit_job_data(job_id, serializable_data)
+            result = parser_service.edit_job_data(job_id, serializable_data, user_token=user_token)
             return Response(result)
         except ParserServiceError as e:
             return Response(

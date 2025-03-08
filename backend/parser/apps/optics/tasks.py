@@ -57,9 +57,7 @@ def process_receipt_ocr(self, job_id):
     logger.info(f"Starting OCR processing for job {job_id}")
     start_time = timezone.now()
 
-    print("I'm here")
     job = ProcessingJob.objects.get(id=job_id)
-    print(job)
     
     # Update job status
     job.update_status('processing')

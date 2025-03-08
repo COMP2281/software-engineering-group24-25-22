@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import logging
 import iso4217parse
 from collections import Counter
+import regex 
 
 logger = logging.getLogger(__name__)
 
@@ -121,15 +122,15 @@ class OCRTemplate:
         self.lines = ocr_text.strip().split('\n')
         self.corrected_values = corrected_values
 
-        # Detect currency from OCR text
-        self._detect_currency()
-
         self.merchant_name = self._find_merchant_name()
+
+        # removed detect_currency() call
 
         if corrected_values:
             # Create a new template from corrections
             self.template_data = self._create_template_from_corrections()
 
+    # currency_code is still unset
     def _detect_currency(self):
         """
         Detect currency symbol and code from OCR text by analyzing each line.
@@ -139,42 +140,15 @@ class OCRTemplate:
         # Count currency occurrences across all lines
         currency_counts = Counter()
 
-        # Use iso4217parse library for currency detection
-        for line in self.lines:
-            try:
-                currencies = iso4217parse.by_symbol_match(line)
-                if currencies:
-                    for currency in currencies:
-                        currency_counts[currency.alpha3] += 1
-                        # Store the first symbol for this currency
-                        if not self.currency_symbol and currency.symbols:
-                            self.currency_symbol = currency.symbols[0]
-            except Exception as e:
-                logger.warning(f"Error detecting currency: {e}")
+        found_symbols = regex.findall(r'\p{Sc}', "".join(self.lines))
+
+        for symbol in found_symbols:
+            currency_counts[symbol] += 1
 
         # Use the most common currency, fallback to default (GBP)
         if currency_counts:
-            self.currency_code = currency_counts.most_common(1)[0][0]
-
-            # Find the corresponding symbol if not set
-            if not self.currency_symbol:
-                for line in self.lines:
-                    try:
-                        currencies = iso4217parse.by_symbol_match(line)
-                        if currencies:
-                            for currency in currencies:
-                                if currency.alpha3 == self.currency_code and currency.symbols:
-                                    self.currency_symbol = currency.symbols[0]
-                                    break
-                            if self.currency_symbol:
-                                break
-                    except Exception:
-                        pass
-
-        # If still no symbol found, use common mappings
-        if not self.currency_symbol and self.currency_code:
-            self.currency_symbol = {'GBP': '£', 'USD': '$', 'EUR': '€', 'JPY': '¥'}.get(
-                self.currency_code, '')
+            self.currency_symbol = currency_counts.most_common(1)[0][0]
+            self.currency_code = "unset"
 
         logger.info(
             f"Detected currency: {self.currency_code} (symbol: {self.currency_symbol})")
@@ -184,6 +158,7 @@ class OCRTemplate:
         Find merchant name in the OCR text, either from corrected values
         or by looking at the first few lines of the receipt.
         """
+
         if self.corrected_values and self.corrected_values.get('merchant_name'):
             return self.corrected_values['merchant_name']
 
@@ -682,11 +657,16 @@ class OCRTemplate:
         # First detect the currency before extraction
         self._detect_currency()
 
+        print("currency code:", self.currency_code)
+        print("currency symbol", self.currency_symbol)
+
         extracted_data = {}
         field_extractors = template_model_data.get('field_extractors', {})
         has_line_items = template_model_data.get('has_line_items', True)
 
-        # First pass: extract fields with absolute line positions
+        print("I'm here (extract)")
+
+        # First pass: extract fields with absolutedb.collection_name.deleteMany({}) line positions
         for field, extractor in field_extractors.items():
             if not extractor.get('expected_present', True):
                 continue
@@ -867,5 +847,7 @@ class OCRTemplate:
         # Clean up internal fields
         if '_last_item_line' in extracted_data:
             del extracted_data['_last_item_line']
+
+        print(extracted_data)
 
         return extracted_data

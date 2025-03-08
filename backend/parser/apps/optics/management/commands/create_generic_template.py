@@ -19,9 +19,6 @@ class Command(BaseCommand):
             currency_info={
                 "iso_code": "GBP",
                 "symbol": "£",
-                "decimal_separator": ".",
-                "thousands_separator": ",",
-                "typical_format": "£X,XXX.XX"
             },
             field_extractors={
                 "merchant_name": {
@@ -65,7 +62,7 @@ class Command(BaseCommand):
                         "(?:sum|due|pay)[\\s:]*[£$€]?(\\d+\\.\\d{2})",  # Other keywords
                         "[£$€]?\\s*(\\d+\\.\\d{2})\\s*$"  # Currency amount at end of line
                     ],
-                    "offset_from_items": 3  # Usually a few lines after last line item
+                    "offset_from_last_item": 3  # Usually a few lines after last line item
                 },
                 "tax_amount": {
                     "expected_present": False,
@@ -73,7 +70,7 @@ class Command(BaseCommand):
                         "(?:tax|vat|gst)[\\s:]*[£$€]?(\\d+\\.\\d{2})",  # Tax keywords
                         "(?:tax|vat|gst)[\\s:]*\\d+%[\\s:]*[£$€]?(\\d+\\.\\d{2})"  # Tax with percentage
                     ],
-                    "offset_from_items": 2  # Usually before total amount
+                    "offset_from_last_item": 2  # Usually before total amount
                 }
             },
             item_patterns=[

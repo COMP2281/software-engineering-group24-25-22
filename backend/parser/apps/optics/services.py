@@ -121,6 +121,7 @@ class TemplateSuite:
         Returns:
             Extracted fields
         """
+
         # Record usage
         template.record_usage()
 
@@ -160,6 +161,7 @@ class TemplateSuite:
         Returns:
             Tuple of (best template, extracted data)
         """
+
         # If no merchant name provided, try to extract it
         if not merchant_name:
             ocr_lines = ocr_text.strip().split('\n')
@@ -412,7 +414,7 @@ class TemplateSuite:
         """
         # Find best template and extract data
         template, extracted_data = TemplateSuite.find_best_template(ocr_text, merchant_name)
-        
+
         # If no template found or extraction failed, return error
         if not template or not extracted_data:
             return {
@@ -422,7 +424,7 @@ class TemplateSuite:
                 "confidence": 0,
                 "template_id": None
             }
-        
+
         # Map fields to expected response format
         receipt_data = {
             "merchant_name": extracted_data.get('merchant_name', ''),
@@ -434,7 +436,7 @@ class TemplateSuite:
             "subtotal_amount": extracted_data.get('subtotal_amount', ''),
             "cost_list": []
         }
-        
+
         # Add line items if present
         if 'cost_items' in extracted_data:
             for item in extracted_data['cost_items']:
@@ -443,7 +445,7 @@ class TemplateSuite:
                     "item": item.get('item_name', ''),
                     "total": item.get('total_price', '')
                 })
-        
+
         # Calculate confidence based on fields extracted
         expected_fields = len(template.field_extractors) if template.field_extractors else 1
         extracted_fields = sum(1 for k, v in extracted_data.items() if v and k != 'cost_items')
@@ -451,7 +453,7 @@ class TemplateSuite:
         
         # Determine if user review is needed
         needs_review = confidence < 80 or not receipt_data['merchant_name'] or not receipt_data['total_amount']
-        
+
         return {
             "extracted_data": receipt_data,
             "template_id": template.pk,

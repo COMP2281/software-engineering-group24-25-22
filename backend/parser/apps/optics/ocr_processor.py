@@ -5,9 +5,9 @@ from PIL import Image
 from pathlib import Path
 from django.utils import timezone
 from django.conf import settings
-from typing import Optional
 
 from apps.jobs.models import ProcessingJob
+from apps.jobs.utils import temp_file_path
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +21,9 @@ class OCRProcessor:
     Handles different file types and extracts structured data.
     """
 
-    job: Optional[ProcessingJob]
+    job:ProcessingJob
     
-    def __init__(self, job: Optional[ProcessingJob] = None):
+    def __init__(self, job: ProcessingJob):
         """
         Initialize processor with an optional job instance.
         
@@ -32,15 +32,9 @@ class OCRProcessor:
                  stored in the job record.
         """
         self.job = job
-        self.output_path = None
-        
-        if job:
-            self.base_path = Path(settings.TEMP_UPLOAD_DIR)
-            self.output_path = self.base_path / str(job.id)
-            # Create output directory if it doesn't exist
-            os.makedirs(self.output_path, exist_ok=True)
+        self.temp_file_path = temp_file_path(job, job.original_filename)
     
-    def process_file(self, file_path=None, file_type=None):
+    def process_file(self):
         """
         Main processing method that delegates to appropriate handler
         based on file type.
@@ -52,26 +46,16 @@ class OCRProcessor:
         Returns:
             dict: Extracted data from the receipt
         """
-        if self.job:
-            print("1. YEAH")
-            print(self.job.uploaded_file)
-            file_path = self.job.uploaded_file.path
-            print("YEAH")
-            file_type = self.job.file_type.lower()
-        elif not file_path or not file_type:
-            raise OCRProcessorError("Either job or file_path and file_type must be provided")
-        else:
-            file_type = file_type.lower()
-        
+
         # Process based on file type
-        if 'image' in file_type:
-            result = self._process_image(file_path)
-        elif 'pdf' in file_type:
-            result = self._process_pdf(file_path)
-        elif 'json' in file_type:
-            result = self._process_json(file_path)
+        if 'image' in self.job.file_type:
+            result = self._process_image(self.temp_file_path)
+        elif 'pdf' in self.job.file_type:
+            result = self._process_pdf(self.temp_file_path)
+        elif 'json' in self.job.file_type:
+            result = self._process_json(self.temp_file_path)
         else:
-            raise OCRProcessorError(f"Unsupported file type: {file_type}")
+            raise OCRProcessorError(f"Unsupported file type: {self.job.file_type}")
         
         # Store results in job if available
         if self.job:

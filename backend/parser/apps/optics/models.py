@@ -95,9 +95,9 @@ def validate_field_extractors(value):
         has_line = 'line' in extractor
         has_offset = 'offset_from_last_item' in extractor
         has_line_hints = 'line_hints' in extractor  # For backward compatibility
-        
+
         if not (has_line or has_offset or has_line_hints):
-            raise ValidationError(f"Field '{field_name}' must have position information (line or offset_from_last_item)")
+            raise ValidationError(f"Field `{field_name}` must have position information (line or offset_from_last_item)")
         
         if has_line and not isinstance(extractor['line'], int):
             raise ValidationError(f"'line' for '{field_name}' must be an integer")
