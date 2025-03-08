@@ -5,6 +5,9 @@ from PIL import Image
 from pathlib import Path
 from django.utils import timezone
 from django.conf import settings
+from typing import Optional
+
+from apps.jobs.models import ProcessingJob
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +20,10 @@ class OCRProcessor:
     Class for OCR processing of receipt images using the template system.
     Handles different file types and extracts structured data.
     """
+
+    job: Optional[ProcessingJob]
     
-    def __init__(self, job=None):
+    def __init__(self, job: Optional[ProcessingJob] = None):
         """
         Initialize processor with an optional job instance.
         
@@ -31,7 +36,7 @@ class OCRProcessor:
         
         if job:
             self.base_path = Path(settings.TEMP_UPLOAD_DIR)
-            self.output_path = self.base_path / str(job.job_id)
+            self.output_path = self.base_path / str(job.id)
             # Create output directory if it doesn't exist
             os.makedirs(self.output_path, exist_ok=True)
     
@@ -47,11 +52,11 @@ class OCRProcessor:
         Returns:
             dict: Extracted data from the receipt
         """
-        print(self.job)
-        print(self.job.uploaded_file_path)
-        print(self.job.file_type)
         if self.job:
+            print("1. YEAH")
+            print(self.job.uploaded_file)
             file_path = self.job.uploaded_file.path
+            print("YEAH")
             file_type = self.job.file_type.lower()
         elif not file_path or not file_type:
             raise OCRProcessorError("Either job or file_path and file_type must be provided")

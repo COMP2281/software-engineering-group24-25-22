@@ -90,14 +90,14 @@ class UploadReceiptView(APIView):
         from apps.optics.tasks import process_receipt_ocr
         try:
             # Direct function call since it's a shared_task function
-            task_result = process_receipt_ocr(str(job.job_id))
+            task_result = process_receipt_ocr(str(job.id))
             
             # Update job status directly since we called the task synchronously
             job.update_status('completed')  # The task will have already completed
             
             # Return job ID
             return Response({
-                'job_id': str(job.job_id),
+                'id': str(job.id),
                 'status': job.status
             }, status=status.HTTP_202_ACCEPTED)
             
@@ -114,17 +114,17 @@ class JobStatusView(APIView):
     """
     API endpoint for checking the status of a processing job
     """
-    def get_object(self, job_id):
+    def get_object(self,id):
         try:
-            return ProcessingJob.objects.get(job_id=job_id)
+            return ProcessingJob.objects.get(id=id)
         except ProcessingJob.DoesNotExist:
             raise Http404("Processing job not found")
     
-    def get(self, request, job_id):
-        job = self.get_object(job_id)
+    def get(self, request, id):
+        job = self.get_object(id)
         
         response_data = {
-            'job_id': str(job.job_id),
+            'id': str(job.id),
             'status': job.status,
             'created_at': job.created_at.isoformat(),
             'updated_at': job.updated_at.isoformat(),
@@ -147,14 +147,14 @@ class ConfirmJobView(APIView):
     """
     API endpoint for confirming processed receipt data
     """
-    def get_object(self, job_id):
+    def get_object(self, id):
         try:
-            return ProcessingJob.objects.get(job_id=job_id)
+            return ProcessingJob.objects.get(id=id)
         except ProcessingJob.DoesNotExist:
             raise Http404("Processing job not found")
     
-    def post(self, request, job_id):
-        job = self.get_object(job_id)
+    def post(self, request, id):
+        job = self.get_object(id)
         
         # Verify job status
         if job.status != 'completed':
@@ -178,7 +178,7 @@ class ConfirmJobView(APIView):
         
         # Queue file transfer to GridFS in the background
         # Direct function call since it's a shared_task function
-        transfer_task = transfer_to_gridfs(str(job.job_id))
+        transfer_task = transfer_to_gridfs(str(job.id))
         
         # Update job with confirmation details
         if not hasattr(job, 'metadata') or job.metadata is None:
@@ -189,7 +189,7 @@ class ConfirmJobView(APIView):
         
         # Return the final receipt data
         return Response({
-            'job_id': str(job.job_id),
+            'id': str(job.id),
             'receipt_data': job.processed_data
         })
 
@@ -197,14 +197,14 @@ class DiscardJobView(APIView):
     """
     API endpoint for discarding a processing job
     """
-    def get_object(self, job_id):
+    def get_object(self, id):
         try:
-            return ProcessingJob.objects.get(job_id=job_id)
+            return ProcessingJob.objects.get(id=id)
         except ProcessingJob.DoesNotExist:
             raise Http404("Processing job not found")
     
-    def delete(self, request, job_id):
-        job = self.get_object(job_id)
+    def delete(self, request, id):
+        job = self.get_object(id)
         
         # Delete the uploaded file
         if job.uploaded_file:
@@ -217,7 +217,7 @@ class DiscardJobView(APIView):
                 job_dir = os.path.dirname(job.uploaded_file.path)
                 if os.path.exists(job_dir):
                     for filename in os.listdir(job_dir):
-                        if filename.startswith(str(job.job_id)):
+                        if filename.startswith(str(job.id)):
                             file_path = os.path.join(job_dir, filename)
                             if os.path.exists(file_path):
                                 os.remove(file_path)
@@ -233,14 +233,14 @@ class EditJobDataView(APIView):
     """
     API endpoint for editing processed receipt data
     """
-    def get_object(self, job_id):
+    def get_object(self, id):
         try:
-            return ProcessingJob.objects.get(job_id=job_id)
+            return ProcessingJob.objects.get(id=id)
         except ProcessingJob.DoesNotExist:
             raise Http404("Processing job not found")
     
-    def post(self, request, job_id):
-        job = self.get_object(job_id)
+    def post(self, request, id):
+        job = self.get_object(id)
         
         # Verify job status
         if job.status != 'completed':
@@ -284,7 +284,7 @@ class EditJobDataView(APIView):
                 from django.core.cache import cache
                 from apps.optics.services import TemplateSuite
                 
-                cache_key = f"template_improvement_{job.job_id}"
+                cache_key = f"template_improvement_{job.id}"
                 
                 # Only proceed if we haven't processed this job's corrections already
                 if not cache.get(cache_key):
@@ -296,7 +296,7 @@ class EditJobDataView(APIView):
                     
                     # Log the correction details
                     logger.info(
-                        f"User corrected {len(corrected_fields)} fields for job {job.job_id}. "
+                        f"User corrected {len(corrected_fields)} fields for job {job.id}. "
                         f"Sending corrections to template system."
                     )
                     

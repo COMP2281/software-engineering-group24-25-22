@@ -24,7 +24,7 @@ django_stubs_ext.monkeypatch()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-mongodb_socket = parse.quote_plus(path.join('server', 'db',  'general.sock'))
+MONGODB_SOCKET = parse.quote_plus(path.join('server', 'db',  'general.sock'))
 
 sys.path.append(str(BASE_DIR.parent))
 
@@ -124,7 +124,7 @@ import mongoengine
 # Connect to MongoDB
 mongoengine.connect(
     db='receipt_scanner_db',
-    host='mongodb://'+mongodb_socket
+    host='mongodb://'+MONGODB_SOCKET
 )
 
 # Django still needs a database for its own functionality
