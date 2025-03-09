@@ -5,14 +5,14 @@ import EditIcon from '@mui/icons-material/Edit';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 
 interface BoxBaseProps {
-    items: { id: string; title: string; description: string }[];
+    items: { id: number; title: string; description: string }[];
     buttonOption: "edit" | "view";
 }
 
 export function BoxBase({ items, buttonOption }: BoxBaseProps) {    
     const navigate = useNavigate();
 
-    const handleEdit = (id: string) => {
+    const handleEdit = (id: number) => {
         navigate(`/dashboard/${id}`);
     };
 
@@ -28,7 +28,7 @@ export function BoxBase({ items, buttonOption }: BoxBaseProps) {
                         {buttonOption === "edit" ? (
                             <IconButton 
                                 aria-label="edit"
-                                onClick={() => handleEdit(`item.id`)}
+                                onClick={() => handleEdit(item.id)}
                             >
                                 <EditIcon />
                             </IconButton>

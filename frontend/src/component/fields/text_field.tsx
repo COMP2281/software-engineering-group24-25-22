@@ -1,25 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import TextField from '@mui/material/TextField';
+import { pendingItems } from '../../data/receipts';
 
 interface InputTextFieldProps {
-    itemID: string;
+    itemID: number;
+    field: string;
+    initialValue?: string;
     setFieldValues: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>;
 }
 
-export function InputTextField({ itemID, setFieldValues }: InputTextFieldProps) {
-    const [value, setValue] = useState('');
+export function InputTextField({ itemID, field, initialValue = '', setFieldValues }: InputTextFieldProps) {
+    const [value, setValue] = useState(initialValue);
     const [error, setError] = useState(false);
     const [rows, setRows] = useState(3);
+
+    useEffect(() => {
+        setValue(initialValue);
+    }, [initialValue]);
 
     useEffect(() => {
         setError(value.trim() === '');
         setFieldValues(prevValues => ({
             ...prevValues,
-            [itemID]: value
+            [field]: value
         }));
-    }, [value, itemID, setFieldValues]);
+    }, [value, field, setFieldValues]);
 
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const currentItem = pendingItems.find(item => item.id === itemID);
+        console.log(`Editing field "${field}" for receipt ${itemID}:`, currentItem);
+        
         const inputValue = event.target.value;
         setValue(inputValue);
         setError(inputValue.trim() === '');
@@ -33,7 +43,7 @@ export function InputTextField({ itemID, setFieldValues }: InputTextFieldProps) 
             <TextField
                 className='w-full'
                 error={error}
-                id={`text-field-${itemID}`}
+                id={`text-field-${itemID}-${field}`}
                 value={value}
                 helperText={error ? "Cannot be Empty" : ""}
                 onChange={handleChange}
