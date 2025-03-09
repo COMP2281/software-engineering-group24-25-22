@@ -1,46 +1,20 @@
-import React, { useState, useEffect } from "react";
-
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Overview } from './pages/overview';
-import { DashBoard } from './pages/dashboard'
-import { Header } from './component/header';
-import { Login } from "./pages/login";
+import { DashBoard } from './pages/dashboard';
+import { Login } from './pages/login';
 
 const App: React.FC = () => {
-  const [hash, setHash] = useState(window.location.hash)
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      setHash(window.location.hash)
-    }
-    window.addEventListener("hashchange", handleHashChange);
-
-    return() => {
-      window.removeEventListener("hashchange", handleHashChange)
-    }
-  })
-
-  const renderPage = () => {
-    switch (hash){
-      case "#upload":
-        return <Overview />
-      case "#dashboard":
-        return <DashBoard />
-      case "#login":
-        return <Login />
-      default:
-        return <Overview />
-    }
-  }
-
   return (
-    <div className="h-fill flex flex-col">
-        <Header />
-        
-      
-      <div className="">
-        {renderPage()}
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/upload" element={<Overview />} />
+        <Route path="/dashboard/:id" element={<DashBoard />} />
+        <Route path="/dashboard" element={<DashBoard />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<Navigate to="/upload" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 };
 
