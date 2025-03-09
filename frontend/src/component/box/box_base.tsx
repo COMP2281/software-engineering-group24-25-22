@@ -28,7 +28,7 @@ export function BoxBase({ items, buttonOption }: BoxBaseProps) {
                         {buttonOption === "edit" ? (
                             <IconButton 
                                 aria-label="edit"
-                                onClick={() => handleEdit(item.id)}
+                                onClick={() => handleEdit(`item.id`)}
                             >
                                 <EditIcon />
                             </IconButton>

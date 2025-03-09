@@ -3,25 +3,35 @@ import React from 'react'
 import { InputTextField } from './text_field';
 import { LocationButton } from '../buttons/location_button'
 
-const oneItem = {title: 'Receipt1', description: 'Pending stuff stuff stuff'}
-const pendingItems = [
+interface pendingItem {
+    id: string;
+    title: string;
+    description: string;
+}
+
+const pendingItems: pendingItem[] = [
     {
+        id: '1',
         title: 'Receipt1',
         description: 'Pending stuff stuff stuff',
     },
     {
+        id: '2',
         title: 'Receipt2',
         description: 'More pending stuff new stuff',
     },
     {
+        id: '3',
         title: 'Receipt3',
         description: 'More pending stuff new stuff',
     },
     {
+        id: '4',
         title: 'Receipt4',
         description: 'More pending stuff new stuff',
     },
     {
+        id: '5',
         title: 'Receipt5',
         description: 'More pending stuff new stuff',
     },

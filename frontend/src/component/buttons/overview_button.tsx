@@ -1,9 +1,12 @@
 import React from 'react';
 import Button from '@mui/material/Button';
+import { useNavigate } from 'react-router-dom';
 
 export function OverviewButton() {
+    const navigate = useNavigate();
+
     const handleClick = () => {
-        window.location.hash = 'overview'
+        navigate('/upload');
     };
 
     return (
