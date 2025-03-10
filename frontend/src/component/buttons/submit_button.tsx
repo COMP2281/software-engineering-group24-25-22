@@ -22,7 +22,7 @@ export function SubmitButton() {
         }
         
         console.log('Field Values:', fieldValues);
-        // navigate('/overview');
+        navigate('/overview');
     };
 
     return (
