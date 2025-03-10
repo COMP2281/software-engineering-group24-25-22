@@ -2,8 +2,8 @@ import React from 'react';
 import LinearProgress from '@mui/material/LinearProgress';
 import ImageIcon from '@mui/icons-material/Image';
 
-import { SubmitButton } from '../buttons/submit_button';
-import { OverviewButton } from '../buttons/overview_button';
+import { SaveButton } from '../buttons/save_button';
+import { BackButton } from '../buttons/back_button';
 
 interface BoxBaseProps {
     image: string;
@@ -29,8 +29,7 @@ export function ImageField({ image, progress }: BoxBaseProps) {
                     <LinearProgress variant="determinate" value={progress} className="w-full mt-2" />
                 </div>
                 <div className="flex flex-row justify-between p-4 w-full">
-                    <OverviewButton />
-                    <SubmitButton />
+                    <BackButton />
                 </div>
 
                 

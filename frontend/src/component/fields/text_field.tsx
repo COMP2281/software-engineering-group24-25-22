@@ -27,8 +27,6 @@ export function InputTextField({ itemID, field, initialValue = '', setFieldValue
     }, [value, field, setFieldValues]);
 
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const currentItem = pendingItems.find(item => item.id === itemID);
-        console.log(`Editing field "${field}" for receipt ${itemID}:`, currentItem);
         
         const inputValue = event.target.value;
         setValue(inputValue);
