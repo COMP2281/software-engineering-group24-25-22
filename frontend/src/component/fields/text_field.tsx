@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import TextField from '@mui/material/TextField';
-import { pendingItems } from '../../data/receipts';
 
 interface InputTextFieldProps {
     itemID: number;

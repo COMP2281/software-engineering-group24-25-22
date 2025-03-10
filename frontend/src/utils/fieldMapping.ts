@@ -1,6 +1,5 @@
 import { PendingItem } from '../types/receipt';
 
-// Maps display names to PendingItem property names
 export const displayToProperty: { [key: string]: keyof PendingItem } = {
     'Merchant Name': 'merchant',
     'Time': 'time',

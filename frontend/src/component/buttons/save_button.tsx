@@ -20,7 +20,7 @@ export function SaveButton({ itemID, fieldValues }: SaveButtonProps) {
             Object.entries(fieldValues).forEach(([displayName, value]) => {
                 const propertyName = displayToProperty[displayName];
                 if (propertyName in updatedItem) {
-                    (updatedItem as any)[propertyName] = value;
+                    (updatedItem as unknown as { [key: string]: string })[propertyName] = value;
                 }
             });
             pendingItems[itemIndex] = updatedItem;

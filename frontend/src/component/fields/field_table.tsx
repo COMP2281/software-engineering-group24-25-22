@@ -9,11 +9,12 @@ import { PendingItem } from '../../types/receipt';
 
 export function FieldTable() {
     const { id } = useParams<{ id: string }>();
-    const fields = Object.keys(displayToProperty);
+    const fields = Object.values(displayToProperty);
     const numericId = parseInt(id || '0');
     
     const foundItem = pendingItems.find(item => item.id === numericId) as PendingItem | undefined;
     const itemValues: Partial<PendingItem> = foundItem || {};
+    console.log(itemValues);
     
     const [currentFieldValues, setCurrentFieldValues] = useState<{ [key: string]: string }>({});
     
@@ -26,10 +27,10 @@ export function FieldTable() {
                         <InputTextField 
                             itemID={numericId}
                             field={field}
-                            initialValue={String(itemValues[displayToProperty[field]] || '')}
+                            initialValue={String(itemValues[field] || '')}
                             setFieldValues={setCurrentFieldValues}
                         />
-                        {field === 'Address' && <LocationButton />}
+                        {field === 'address' && <LocationButton />}
                     </div>
                 ))}
             </div>
