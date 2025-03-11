@@ -50,7 +50,7 @@ class ParserService:
         files = {'file': file_obj}
         
         # Prepare headers
-        from .json_utils import MongoJSONEncoder
+        from common.json_utils import MongoJSONEncoder
         headers = self.headers.copy()
         
         # Add metadata

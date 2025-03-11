@@ -48,6 +48,9 @@ def validate_field_extractors(value):
         raise ValidationError("field_extractors must be a dictionary")
     
     for field_name, extractor in value.items():
+        print(field_name)
+        print(extractor)
+        print(" ")
         # Check basic structure
         if not isinstance(extractor, dict):
             raise ValidationError(f"Extractor for '{field_name}' must be a dictionary")
@@ -94,9 +97,8 @@ def validate_field_extractors(value):
         # Validate position information - either line or offset_from_last_item must be present
         has_line = 'line' in extractor
         has_offset = 'offset_from_last_item' in extractor
-        has_line_hints = 'line_hints' in extractor  # For backward compatibility
 
-        if not (has_line or has_offset or has_line_hints):
+        if not (has_line or has_offset):
             raise ValidationError(f"Field `{field_name}` must have position information (line or offset_from_last_item)")
         
         if has_line and not isinstance(extractor['line'], int):
@@ -104,11 +106,6 @@ def validate_field_extractors(value):
         
         if has_offset and not isinstance(extractor['offset_from_last_item'], int):
             raise ValidationError(f"'offset_from_last_item' for '{field_name}' must be an integer")
-            
-        # Validate legacy line_hints if present for backward compatibility
-        line_hints = extractor.get('line_hints', [])
-        if line_hints and not isinstance(line_hints, list):
-            raise ValidationError(f"'line_hints' for '{field_name}' must be a list of integers")
         
         # Validate context_words if present
         context_words = extractor.get('context_words', [])
@@ -148,6 +145,8 @@ def validate_item_patterns(value):
         groups = pattern_def.get('groups', {})
         if not isinstance(groups, dict):
             raise ValidationError(f"'groups' in item pattern at index {i} must be a dictionary")
+
+        print(groups)
         
         for field, group_idx in groups.items():
             if not isinstance(field, str):

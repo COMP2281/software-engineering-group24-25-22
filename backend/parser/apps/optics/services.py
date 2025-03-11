@@ -3,11 +3,29 @@ import logging
 from datetime import timedelta
 from django.utils import timezone
 from mongoengine.queryset.visitor import Q
+from rapidfuzz import fuzz, process
 
 from .models import ReceiptTemplate
 from .lib.templates import OCRTemplate, OCRTemplateCorrection
 
 logger = logging.getLogger(__name__)
+
+"""
+MERCHANT FUZZY MATCHING IMPLEMENTATION
+
+This module implements RapidFuzz-based merchant name matching to improve 
+template selection reliability. Key improvements:
+
+1. Added find_best_merchant_match() method to compare receipt text with merchant names
+   using multiple fuzzy matching strategies (ratio, partial_ratio, token_sort_ratio)
+
+2. Updated find_template_candidates() to use fuzzy matching when receipt text is provided
+
+3. Enhanced parse_receipt() to attempt fuzzy merchant identification before template matching
+
+These improvements help the system better identify merchants regardless of
+format variations, spacing differences, or additional text (like "EXPRESS" or "SUPERSTORE").
+"""
 
 
 class TemplateSuite:
@@ -20,9 +38,54 @@ class TemplateSuite:
     - Direct interfaces for parsing and correction
     - Data format conversion utilities
     """
+    
+    @staticmethod
+    def find_best_merchant_match(receipt_text: str, merchant_list=None, threshold=70):
+        """
+        Find the best matching merchant from database using fuzzy matching.
+        
+        Args:
+            receipt_text: First 3 lines of receipt text
+            merchant_list: Optional list of merchant names (fetched if None)
+            threshold: Minimum score (0-100) to consider a match
+            
+        Returns:
+            Tuple of (best_match, score) or (None, 0) if no good match
+        """
+        # Get merchant list if not provided
+        if merchant_list is None:
+            merchant_list = list(ReceiptTemplate.objects.distinct('merchant_name'))
+            
+        # No merchants to compare with
+        if not merchant_list:
+            return None, 0
+            
+        # Try each matching strategy
+        best_match = None
+        best_score = 0
+        
+        # Try fuzzy matching with different algorithms
+        for merchant in merchant_list:
+            # Calculate multiple scores to handle different types of variations
+            ratio_score = fuzz.ratio(receipt_text, merchant)
+            partial_score = fuzz.partial_ratio(receipt_text, merchant)
+            token_score = fuzz.token_sort_ratio(receipt_text, merchant)
+            
+            # Use the highest score from any method
+            score = max(ratio_score, partial_score, token_score)
+            
+            if score > best_score:
+                best_score = score
+                best_match = merchant
+        
+        # Return best match if it meets threshold
+        if best_score >= threshold:
+            return best_match, best_score
+        
+        return None, 0
 
     @staticmethod
-    def find_template_candidates(merchant_name: str, limit: int = 5) -> List[ReceiptTemplate]:
+    def find_template_candidates(merchant_name: str, limit: int = 5, receipt_text: Optional[str] = None) -> List[ReceiptTemplate]:
         """
         Find potential template matches for a given merchant name.
         Uses fuzzy matching to handle variations in merchant names.
@@ -30,6 +93,7 @@ class TemplateSuite:
         Args:
             merchant_name: The merchant name to match
             limit: Maximum number of templates to return
+            receipt_text: Optional full receipt text for better matching
 
         Returns:
             List of template objects sorted by relevance
@@ -43,17 +107,44 @@ class TemplateSuite:
         if exact_matches.count() > 0:
             return list(exact_matches)
 
-        # If no exact match, try fuzzy match on active templates
+        # If receipt text is provided, try fuzzy matching with RapidFuzz
+        if receipt_text:
+            # Get first 3 lines for merchant matching
+            receipt_lines = receipt_text.strip().split('\n')
+            first_lines = '\n'.join(receipt_lines[:min(3, len(receipt_lines))])
+            
+            # Get all active merchant names
+            active_merchants = list(ReceiptTemplate.objects(
+                is_archived=False
+            ).distinct('merchant_name'))
+            
+            # Find best fuzzy match
+            best_match, score = TemplateSuite.find_best_merchant_match(
+                first_lines, 
+                merchant_list=active_merchants
+            )
+            
+            if best_match:
+                logger.info(f"Found fuzzy match for '{merchant_name}': '{best_match}' (score: {score})")
+                
+                fuzzy_matches = ReceiptTemplate.objects(
+                    merchant_name=best_match,
+                    is_archived=False
+                ).order_by('-usage_count')[:limit]
+                
+                if fuzzy_matches.count() > 0:
+                    return list(fuzzy_matches)
+        
+        # If no fuzzy match or no receipt text, fall back to basic matching
         # This is a simplified fuzzy match using contains
-        # In production, you would use a more sophisticated approach
-        fuzzy_matches = ReceiptTemplate.objects(
+        basic_fuzzy_matches = ReceiptTemplate.objects(
             merchant_name__icontains=merchant_name.split(
             )[0] if merchant_name.split() else "",
             is_archived=False
         ).order_by('-usage_count')[:limit]
 
-        if fuzzy_matches.count() > 0:
-            return list(fuzzy_matches)
+        if basic_fuzzy_matches.count() > 0:
+            return list(basic_fuzzy_matches)
 
         # If still no matches, check archived templates
         archived_matches = ReceiptTemplate.objects(
@@ -168,8 +259,9 @@ class TemplateSuite:
             # Simple heuristic: use first line as merchant name
             merchant_name = ocr_lines[0].strip() if ocr_lines else "Unknown"
 
-        # Find template candidates
-        candidates = TemplateSuite.find_template_candidates(merchant_name)
+        print("1")
+        # Find template candidates using both merchant name and receipt text for better matching
+        candidates = TemplateSuite.find_template_candidates(merchant_name, receipt_text=ocr_text)
 
         if not candidates:
             logger.warning(f"No template candidates found for {merchant_name}")
@@ -274,46 +366,76 @@ class TemplateSuite:
         # Count how many fields were corrected
         significant_corrections = sum(
             1 for correct in field_corrections.values() if not correct)
+            
+        # Check if cost items were corrected - this is always considered significant
+        cost_items_corrected = False
+        corrected_items_count = 0
+        extracted_items_count = 0
+        
+        if 'cost_items' in extracted_data and 'cost_list' in corrected_data:
+            extracted_items = extracted_data.get('cost_items', [])
+            corrected_items = corrected_data.get('cost_list', [])
+            extracted_items_count = len(extracted_items)
+            corrected_items_count = len(corrected_items)
+            
+            # Check if the number of items is different
+            if extracted_items_count != corrected_items_count:
+                cost_items_corrected = True
+                logger.info(f"Cost items corrected: extracted {extracted_items_count} vs corrected {corrected_items_count}")
+            else:
+                # Even if count is the same, check for content differences
+                # This is a simplified check - in reality would need to match items
+                for i, (extracted, corrected) in enumerate(zip(extracted_items, corrected_items)):
+                    extracted_name = extracted.get('item_name', '')
+                    if not extracted_name:
+                        extracted_name = extracted.get('item', '')
+                    
+                    corrected_name = corrected.get('item', '')
+                    
+                    # Check if names are significantly different
+                    if extracted_name != corrected_name and not (extracted_name in corrected_name or corrected_name in extracted_name):
+                        cost_items_corrected = True
+                        logger.info(f"Cost item content corrected: '{extracted_name}' to '{corrected_name}'")
+                        break
 
-        if significant_corrections > 1:
-            # For 2+ corrections, create a new template instead of updating the existing one
+        # Always create a new template if cost items were corrected
+        # OR if multiple fields were corrected
+        if cost_items_corrected or significant_corrections > 0:
+            # Create a new template from the correction
             new_template = TemplateSuite.create_template_from_correction(ocr_text, corrected_data)
-            logger.info(f"Created new template from correction due to {significant_corrections} fields needing correction")
+            
+            if cost_items_corrected:
+                logger.info(f"Created new template from correction due to cost items needing correction ({extracted_items_count} vs {corrected_items_count})")
+            else:
+                logger.info(f"Created new template from correction due to {significant_corrections} fields needing correction")
             
             # Return the new template instead of the updated one
             return new_template
         
-        # For single field correction or no corrections, update the existing template
-        if significant_corrections == 1:
-            # Create a temporary template to extract the corrected pattern
-            new_ocr_template = OCRTemplate(ocr_text, corrected_data)
-            new_data = new_ocr_template.to_model_data()
-            
-            # Find which field was corrected
-            corrected_field = None
-            for field, correct in field_corrections.items():
-                if not correct:
-                    corrected_field = field
-                    break
-            
-            # Update only the corrected field
-            if corrected_field and corrected_field in new_data['field_extractors']:
-                template.field_extractors[corrected_field] = new_data['field_extractors'][corrected_field]
-                logger.info(f"Updated pattern for field '{corrected_field}' in template {template.pk}")
-            
-            # Update line item patterns if they were the corrected field
-            if 'cost_items' in extracted_data and 'cost_list' in corrected_data:
-                extracted_items = extracted_data.get('cost_items', [])
-                corrected_items = corrected_data.get('cost_list', [])
-                
-                if len(extracted_items) != len(corrected_items) or corrected_field == 'cost_items':
-                    # Line items were corrected
-                    if new_data['item_patterns']:
-                        template.item_patterns = new_data['item_patterns']
-                        template.has_line_items = new_data['has_line_items']
-                        if 'line_items_start_line' in new_data:
-                            template.line_items_start_line = new_data['line_items_start_line']
-                        logger.info(f"Updated line item patterns in template {template.pk}")
+        # For no corrections (which shouldn't happen often), update the existing template
+        # Create a temporary template to extract any updated patterns
+        new_ocr_template = OCRTemplate(ocr_text, corrected_data)
+        new_data = new_ocr_template.to_model_data()
+        
+        # Find which field was corrected (if any)
+        corrected_field = None
+        for field, correct in field_corrections.items():
+            if not correct:
+                corrected_field = field
+                break
+        
+        # Update the corrected field if one exists
+        if corrected_field and corrected_field in new_data['field_extractors']:
+            template.field_extractors[corrected_field] = new_data['field_extractors'][corrected_field]
+            logger.info(f"Updated pattern for field '{corrected_field}' in template {template.pk}")
+        
+        # This section is now less likely to be reached, but kept for completeness
+        if 'cost_items' in extracted_data and 'cost_list' in corrected_data and new_data['item_patterns']:
+            template.item_patterns = new_data['item_patterns']
+            template.has_line_items = new_data['has_line_items']
+            if 'line_items_start_line' in new_data:
+                template.line_items_start_line = new_data['line_items_start_line']
+            logger.info(f"Updated line item patterns in template {template.pk}")
 
         # Save updated template
         template.save()
@@ -412,6 +534,24 @@ class TemplateSuite:
         Returns:
             Dict with extracted data, confidence, and template info
         """
+        print("HERE")
+        # Extract merchant name from receipt if not provided
+        if not merchant_name:
+            receipt_lines = ocr_text.strip().split('\n')
+            first_lines = '\n'.join(receipt_lines[:min(3, len(receipt_lines))])
+            
+            # Get active merchant names for matching
+            merchant_list = list(ReceiptTemplate.objects(is_archived=False).distinct('merchant_name'))
+            
+            # Try fuzzy matching first
+            best_match, score = TemplateSuite.find_best_merchant_match(first_lines, merchant_list)
+            if best_match and score >= 70:
+                merchant_name = best_match
+                logger.info(f"Used fuzzy matching to identify merchant: '{merchant_name}' (score: {score})")
+            else:
+                # Fall back to first line if no good match
+                merchant_name = receipt_lines[0].strip() if receipt_lines else "Unknown"
+        
         # Find best template and extract data
         template, extracted_data = TemplateSuite.find_best_template(ocr_text, merchant_name)
 
@@ -424,6 +564,8 @@ class TemplateSuite:
                 "confidence": 0,
                 "template_id": None
             }
+
+        print("THERE")
 
         # Map fields to expected response format
         receipt_data = {
