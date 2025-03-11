@@ -120,29 +120,44 @@ class ParseReceiptView(APIView):
             for chunk in file_obj.chunks():
                 tmp.write(chunk)
 
-        # Process receipt using Celery task but wait for completion
+        # Process receipt using Celery task asynchronously but wait for result
         from apps.optics.tasks import process_receipt_ocr
         try:
             import time
-            from celery.result import AsyncResult
+            from celery.exceptions import TimeoutError
             
             # Start the task
             start_time = time.time()
-            task = process_receipt_ocr(str(job.id))
+            print(f"Starting Celery task for job {job.id}")
             
-            # Wait for task completion (with 5-minute timeout)
+            # Launch the task
+            task = process_receipt_ocr.delay(str(job.id))
+            
+            # Wait for task completion with timeout
             try:
-                # This will block until the task completes or times out
-                task_result = task.get(timeout=300)  # 5 minutes
-                print(task_result)
+                task_result = task.get(timeout=30)  # 30 seconds timeout
+                print(f"Task result: {task_result}")
+            except TimeoutError:
+                # If it times out, that's okay - we'll return a pending status
+                print(f"Task {task.id} is still processing (timeout reached)")
+                job.update_status('processing')
+                
+                return Response({
+                    'id': str(job.id),
+                    'status': 'processing',
+                    'message': 'Receipt processing started'
+                }, status=status.HTTP_202_ACCEPTED)
             except Exception as e:
-                # Handle timeout or other task exceptions
-                job.update_status('failed', error_message=f"Processing failed or timed out: {str(e)}")
+                # Handle other exceptions
+                error_msg = f"Processing task failed: {str(e)}"
+                print(error_msg)
+                job.update_status('failed', error_message=error_msg)
                 return Response(
-                    {'error': 'Processing timed out or failed'}, 
-                    status=status.HTTP_408_REQUEST_TIMEOUT
+                    {'error': error_msg}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
                 
+            # If we get here, the task completed within the timeout
             # Refresh job from database to get latest state
             job = ProcessingJob.objects.get(id=job.id)
             

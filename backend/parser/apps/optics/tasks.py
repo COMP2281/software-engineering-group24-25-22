@@ -55,23 +55,38 @@ def process_receipt_ocr(self, job_id):
     from .ocr_processor import OCRProcessor, OCRProcessorError
     
     logger.info(f"Starting OCR processing for job {job_id}")
+    print(f"***CELERY TASK STARTED FOR JOB {job_id}***")
     start_time = timezone.now()
 
-    job = ProcessingJob.objects.get(id=job_id)
-    
-    # Update job status
-    job.update_status('processing')
-    
-    # Create processor and process
-    processor = OCRProcessor(job)
-    result = processor.process_file()
-    
-    # Update job status
-    job.update_status('completed')
-    
-    # Calculate duration
-    duration = timezone.now() - start_time
-    logger.info(f"OCR processing completed in {duration.total_seconds():.2f} seconds")
+    try:
+        job = ProcessingJob.objects.get(id=job_id)
+        
+        # Update job status
+        job.update_status('processing')
+        
+        # Create processor and process
+        processor = OCRProcessor(job)
+        result = processor.process_file()
+
+        print("result", result)
+        
+        # Update job status
+        job.update_status('completed')
+        
+        # Calculate duration
+        duration = timezone.now() - start_time
+        logger.info(f"OCR processing completed in {duration.total_seconds():.2f} seconds")
+        print(f"***CELERY TASK COMPLETED FOR JOB {job_id} in {duration.total_seconds():.2f} seconds***")
+        
+        return {
+            'status': 'success',
+            'job_id': str(job_id),
+            'duration_seconds': duration.total_seconds()
+        }
+    except Exception as e:
+        logger.error(f"Error in Celery task for job {job_id}: {str(e)}")
+        print(f"***CELERY TASK ERROR FOR JOB {job_id}: {str(e)}***")
+        raise
     
     # try:
     #     # Get the job

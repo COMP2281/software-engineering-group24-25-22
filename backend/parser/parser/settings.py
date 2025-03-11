@@ -76,9 +76,14 @@ MIDDLEWARE = [
     # 'apps.jobs.views.APIKeyAuthentication',  # API key authentication middleware
 ]
 
-# Celery Configuration
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+# Celery Configuration with MongoDB backend
+CELERY_BROKER_URL = f'mongodb://localhost:27017/celery'
+CELERY_RESULT_BACKEND = f'mongodb://localhost:27017/celery'
+CELERY_MONGODB_BACKEND_SETTINGS = {
+    'database': 'celery',
+    'taskmeta_collection': 'celery_taskmeta',
+    'groupmeta_collection': 'celery_groupmeta',
+}
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

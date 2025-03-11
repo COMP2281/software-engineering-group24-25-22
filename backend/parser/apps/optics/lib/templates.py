@@ -850,6 +850,7 @@ class OCRTemplate:
                 current_item = None
                 i = start_line
                 
+                print("LINE ITEMS")
                 while i < len(self.lines):
                     matched = False
                     # Try to match this line against our item patterns
@@ -870,7 +871,11 @@ class OCRTemplate:
                                         item_data[field] = match.group(group_idx)
                                     elif field == "quantity" and group_idx is None:
                                         item_data[field] = "1"  # Default quantity if not in pattern
-
+                                print("---------------------- ITEM_DATA --------------------")
+                                if set(["total_price", "quantity"]).issubset(pattern_def['groups'].keys()):
+                                    item_data['unit_price'] = f"{(float(item_data['total_price']) / float(item_data['quantity'])):.2f}"
+                                print(json.dumps(item_data))
+                                print("---------------------- ITEM_DATA END --------------------")
                                 if item_data:
                                     # Found a new regular item
                                     line_items.append(item_data)

@@ -4,6 +4,7 @@ from datetime import timedelta
 from django.utils import timezone
 from mongoengine.queryset.visitor import Q
 from rapidfuzz import fuzz, process
+import json
 
 from .models import ReceiptTemplate
 from .lib.templates import OCRTemplate, OCRTemplateCorrection
@@ -320,14 +321,14 @@ class TemplateSuite:
         # Extract fields using the template
         extracted_data = ocr_template.extract_fields(template_data)
 
-        # Update usage statistics periodically
-        if template.usage_count % 10 == 0:  # Every 10 uses
-            # Get total uses for this merchant - calculated manually in MongoEngine
-            templates = ReceiptTemplate.objects(merchant_name=template.merchant_name)
-            total_merchant_uses = sum(t.usage_count for t in templates) or 1
+        # # Update usage statistics periodically
+        # if template.usage_count % 10 == 0:  # Every 10 uses
+        # Get total uses for this merchant - calculated manually in MongoEngine
+        templates = ReceiptTemplate.objects(merchant_name=template.merchant_name)
+        total_merchant_uses = sum(t.usage_count for t in templates) or 1
 
-            # Update statistics
-            template.update_recent_usage_stats(total_merchant_uses)
+        # Update statistics
+        template.update_recent_usage_stats(total_merchant_uses)
 
         return extracted_data
 
@@ -656,7 +657,9 @@ class TemplateSuite:
                 "template_id": None
             }
 
-        print("THERE")
+        print("--------------------- EXTRACTED DATA -------------------------------")
+        print("EXTRACTED_DATA", extracted_data)
+        print("--------------------- EXTRACTED DATA END ---------------------------")
 
         # Map fields to expected response format
         receipt_data = {
@@ -676,7 +679,8 @@ class TemplateSuite:
                 receipt_data['cost_list'].append({
                     "quantity": item.get('quantity', '1'),
                     "item": item.get('item_name', ''),
-                    "total": item.get('total_price', '')
+                    "total": item.get('total_price', ''),
+                    "unit_price": item.get("unit_price", "")
                 })
 
         # Calculate confidence based on fields extracted
@@ -792,10 +796,12 @@ class TemplateSuite:
             'currency': api_data.get('currency', 'USD'),
         }
         
+        print("--------------- CONVERT TO INTERNAL FORMAT ----------------------")
         # Add line items if present
         if 'cost_list' in api_data and api_data['cost_list']:
             line_items = []
             for item in api_data['cost_list']:
+                print(json.dumps(item))
                 line_items.append({
                     'item_name': item.get('item', ''),
                     'quantity': item.get('quantity', '1'),
@@ -803,6 +809,7 @@ class TemplateSuite:
                     'unit_price': item.get('unit_price', '')
                 })
             internal_data['line_items'] = line_items
+        print("--------------- CONVERT TO INTERNAL FORMAT END ------------------")
             
         return internal_data
         
