@@ -115,6 +115,7 @@ class ParseReceiptView(APIView):
         job.metadata['temp_expiration'] = (timezone.now() + timezone.timedelta(hours=4)).isoformat()
         job.save()
 
+        # Save the uploaded file to a temporary location
         with open(temp_file_path(job, file_obj.name), "wb") as tmp:
             for chunk in file_obj.chunks():
                 tmp.write(chunk)
@@ -133,6 +134,7 @@ class ParseReceiptView(APIView):
             try:
                 # This will block until the task completes or times out
                 task_result = task.get(timeout=300)  # 5 minutes
+                print(task_result)
             except Exception as e:
                 # Handle timeout or other task exceptions
                 job.update_status('failed', error_message=f"Processing failed or timed out: {str(e)}")

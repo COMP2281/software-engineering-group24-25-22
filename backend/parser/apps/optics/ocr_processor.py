@@ -123,20 +123,9 @@ class OCRProcessor:
                 image = Image.open(image_path)
                 
                 # Run OCR on the image (using pytesseract in a real implementation)
-                # ocr_text = pytesseract.image_to_string(image)
+                ocr_text = pytesseract.image_to_string(image)
                 
                 # For demo purposes, simulate OCR text
-                ocr_text = """Example Store
-123 Main St
-Date: 02/15/2025
-Register: 2
---------------------------
-1 Sample Item      $42.99
---------------------------
-Subtotal:         $42.99
-Tax:               $3.01
-Total:            $46.00
-"""
             except Exception as e:
                 logger.error(f"OCR error: {str(e)}")
                 raise OCRProcessorError(f"Failed to extract text from image: {str(e)}")

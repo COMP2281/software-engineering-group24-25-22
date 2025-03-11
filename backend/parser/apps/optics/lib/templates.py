@@ -175,109 +175,13 @@ class OCRTemplate:
         ],
     }
 
-    @staticmethod
-    def _preprocess_ocr_text(ocr_text: str) -> str:
-        """
-        Preprocess OCR text to clean up common artifacts and improve parsing accuracy.
-        
-        Args:
-            ocr_text: Raw OCR text
-            
-        Returns:
-            Cleaned OCR text
-        """
-        import re
-        
-        # First, standardize line breaks and strip extra whitespace
-        # ocr_text = ocr_text.replace('\r\n', '\n').replace('\r', '\n')
-        #
-        # # Remove URL encoding artifacts (common OCR misreads)
-        # ocr_text = re.sub(r'%20', ' ', ocr_text)
-
-        # Fix common OCR misreads
-        replacements = [
-            # Common digit/letter confusion
-            (r'(\d+)m1', r'\1ml'),  # 900m1 -> 900ml
-            (r'(\d+)1', r'\1l'),    # 1.51 -> 1.5l (liter)
-            (r'(\d+)o', r'\1o'),    # 5o0g -> 500g
-            (r'(\d+)O', r'\1O'),    # 5O0g -> 500g
-            # Price formatting issues
-            (r'(\d)x(\d)', r'\1x\2'),  # Fix spacing in quantities like 2x3
-            # General cleanups
-            (r'\s{2,}', ' '),       # Multiple spaces to single space
-            (r'^\s+', ''),          # Leading spaces on lines 
-            (r'\s+$', ''),          # Trailing spaces on lines
-        ]
-        
-        # Process each line to filter out garbage
-        cleaned_lines = []
-        for line in ocr_text.split('\n'):
-            line = line.strip()
-
-            for pattern, replacement in replacements:
-                line = re.sub(pattern, replacement, line)
-        
-            # Skip lines comprised of only adjacent characters spaced by 1
-            if re.match(r'^(.)( (.))+$', line):
-                continue
-            
-            # Skip empty lines or very short lines (less than 2 chars)
-            if not line or len(line) < 2:
-                continue
-                
-            # Skip lines that are just repeated symbols
-            if re.match(r'^([-_.,:;!@#$%^&*()+=~`<>?/\\|])\1{3,}$', line):
-                continue
-                
-            # Skip lines with too many special characters (more aggressive filtering)
-            special_chars = re.sub(r'[a-zA-Z0-9\s£$€]', '', line)
-            if len(special_chars) > (len(line) * 0.4):  # More than 40% special chars
-                continue
-                
-            # Skip lines with very few alphanumeric characters
-            alphanumeric_chars = re.sub(r'[^a-zA-Z0-9]', '', line)
-            if len(alphanumeric_chars) < 2 and len(line) > 3:
-                continue
-                
-            # Skip garbage lines that are likely OCR artifacts 
-            garbage_patterns = [
-                r'^[_\-—–.,:;\'"`*]+$',  # Just punctuation
-                r'^[\\\\/|]+$',          # Just slashes or pipes
-                r'^[^a-zA-Z0-9£$€]{4,}$',  # 4+ consecutive non-alphanumeric chars
-                r'^[a-zA-Z\s]{1,2}$',    # Single letters with spaces
-                r'^\s*[_\-—–.]{2,}\s*$',  # Just dashes/underscores
-            ]
-            
-            skip_line = False
-            for pattern in garbage_patterns:
-                if re.match(pattern, line):
-                    skip_line = True
-                    break
-                    
-            if skip_line:
-                continue
-                
-            # Cleanup line - remove garbage at start and end of lines
-            line = re.sub(r'^[^a-zA-Z0-9£$€]*([a-zA-Z0-9£$€].*[a-zA-Z0-9£$€])[^a-zA-Z0-9£$€]*$', r'\1', line)
-
-            # Add the cleaned line
-            cleaned_lines.append(line)
-        
-        # Consolidate consecutive empty lines
-        text = '\n'.join(cleaned_lines)
-        # text = re.sub(r'\n{3,}', '\n\n', text)  # No more than 2 consecutive newlines
-
-        return text
-
     def __init__(self, ocr_text: str, corrected_values: Optional[OCRTemplateCorrection] = None):
         """
         Initialize with OCR text and optional corrected values.
         If corrected values are provided, constructs a new template.
         """
-        # Preprocess OCR text to clean up artifacts
-        cleaned_ocr_text = self._preprocess_ocr_text(ocr_text)
 
-        self.lines = cleaned_ocr_text.strip().split('\n')
+        self.lines = ocr_text.strip().split('\n')
         self.corrected_values = corrected_values
 
         self.merchant_name = self._find_merchant_name()
