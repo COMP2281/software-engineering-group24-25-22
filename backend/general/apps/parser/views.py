@@ -7,7 +7,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
 from .services import ParserService, ParserServiceError
 from .serializers import ReceiptUploadSerializer, ReceiptDataSerializer
-from .json_utils import MongoJSONEncoder
+from common.json_utils import MongoJSONEncoder
 
 class ReceiptParseView(APIView):
     """

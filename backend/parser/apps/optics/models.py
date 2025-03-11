@@ -43,6 +43,8 @@ def validate_field_extractors(value):
     - One of:
       - line: Absolute line number for fields before line items
       - offset_from_last_item: Relative position from last line item
+    - Optional:
+      - is_fuzzy_haystack: Boolean indicating if this field uses reverse fuzzy matching
     """
     if not isinstance(value, dict):
         raise ValidationError("field_extractors must be a dictionary")
@@ -106,6 +108,10 @@ def validate_field_extractors(value):
         
         if has_offset and not isinstance(extractor['offset_from_last_item'], int):
             raise ValidationError(f"'offset_from_last_item' for '{field_name}' must be an integer")
+        
+        # Validate is_fuzzy_haystack if present
+        if 'is_fuzzy_haystack' in extractor and not isinstance(extractor['is_fuzzy_haystack'], bool):
+            raise ValidationError(f"'is_fuzzy_haystack' for '{field_name}' must be a boolean")
         
         # Validate context_words if present
         context_words = extractor.get('context_words', [])
