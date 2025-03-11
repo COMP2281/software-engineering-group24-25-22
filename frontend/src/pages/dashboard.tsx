@@ -14,10 +14,10 @@ export function DashBoard() {
     return (
         <div className="flex flex-col lg:flex-row lg:h-screen  w-full ">
             <div className='lg:w-1/3 w-full p-4 h-full '>
-                <ImageField image={"receipt1.png"} progress={progress} />
+                <ImageField progress={progress} />
             </div>
             <div className='lg:w-2/3 w-full p-4'>
-                <FieldTable setFieldValues={setFieldValues} />
+                <FieldTable/>
             </div>
         </div>
     );

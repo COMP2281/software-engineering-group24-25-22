@@ -10,4 +10,5 @@ export interface PendingItem {
     tax: string;
     category: string;
     edit: boolean;
+    image: string;
 } 

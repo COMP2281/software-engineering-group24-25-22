@@ -1,27 +1,30 @@
 import React from 'react';
-import LinearProgress from '@mui/material/LinearProgress';
-import ImageIcon from '@mui/icons-material/Image';
-
+import { useParams } from 'react-router-dom';
+import { pendingItems } from '../../data/receipts';
 import { BackButton } from '../buttons/back_button';
 import { SubmitButton } from '../buttons/submit_button';
+import ImageIcon from '@mui/icons-material/Image';
+import LinearProgress from '@mui/material/LinearProgress';
 
 interface BoxBaseProps {
-    image: string;
     progress: number;
 }
 
-export function ImageField({ image, progress }: BoxBaseProps) {
-    const imagePath = image ? `/items/${image}` : null;
+export function ImageField({ progress }: BoxBaseProps) {
+    const { id } = useParams<{ id: string }>();
+    const numericId = parseInt(id || '0');
+    const foundItem = pendingItems.find(item => item.id === numericId);
+    const image = foundItem?.image || "None";
 
     return (                                                                
         <div className="w-full h-full">
-            <div className="flex flex-col ">
+            <div className="flex flex-col">
                 <div className="w-full flex flex-col justify-center items-center">
-                    {imagePath ? (
+                    {image !== "None" ? (
                         <img
-                        src={imagePath}
-                        alt="Item"
-                        className="max-h-[700px] max-w-[600px] w-auto h-auto object-contain pb-4"
+                            src={image}
+                            alt="Receipt"
+                            className="max-h-[700px] max-w-[600px] w-auto h-auto object-contain pb-4"
                         />
                     ) : (
                         <ImageIcon style={{ fontSize: '500px' }} className='pb-4' />
@@ -32,8 +35,6 @@ export function ImageField({ image, progress }: BoxBaseProps) {
                     <BackButton />
                     <SubmitButton />
                 </div>
-
-                
             </div>
         </div>
     );

@@ -14,7 +14,6 @@ export function FieldTable() {
     
     const foundItem = pendingItems.find(item => item.id === numericId) as PendingItem | undefined;
     const itemValues: Partial<PendingItem> = foundItem || {};
-    console.log(itemValues);
     
     const [currentFieldValues, setCurrentFieldValues] = useState<{ [key: string]: string }>({});
     

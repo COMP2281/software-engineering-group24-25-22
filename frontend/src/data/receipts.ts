@@ -1,4 +1,7 @@
+import testImage from '../items/receipt1.png';
+import testImage2 from '../items/receipt2.png';
 import { PendingItem } from "../types/receipt";
+
 
 export const pendingItems: PendingItem[] = [
     {
@@ -13,6 +16,7 @@ export const pendingItems: PendingItem[] = [
         tax: '10.00',
         category: 'Groceries',
         edit: true,
+        image: testImage,
     },
     {
         id: 2,
@@ -26,6 +30,7 @@ export const pendingItems: PendingItem[] = [
         tax: '7.55',
         category: 'Home Goods',
         edit: true,
+        image: testImage2,
     },
     {
         id: 3,
@@ -39,6 +44,7 @@ export const pendingItems: PendingItem[] = [
         tax: '30.00',
         category: 'Electronics',
         edit: true,
+        image: "None",
     },
     {
         id: 4,
@@ -52,6 +58,7 @@ export const pendingItems: PendingItem[] = [
         tax: '25.00',
         category: 'Bulk Supplies',
         edit: false,
+        image: "None",
     },
     {
         id: 5,
@@ -65,5 +72,6 @@ export const pendingItems: PendingItem[] = [
         tax: '15.08',
         category: 'Groceries',
         edit: false,
+        image: "None",
     },
 ]; 
