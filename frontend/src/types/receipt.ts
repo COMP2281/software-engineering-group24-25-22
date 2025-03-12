@@ -9,6 +9,5 @@ export interface PendingItem {
     description: string;
     tax: string;
     category: string;
-    edit: boolean;
     image: string;
 } 

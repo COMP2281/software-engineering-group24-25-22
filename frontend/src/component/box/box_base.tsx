@@ -16,6 +16,10 @@ export function BoxBase({ items, buttonOption }: BoxBaseProps) {
         navigate(`/dashboard/${id}`);
     };
 
+    const handleView = (id: number) => {
+        navigate(`/dashboard/view/${id}`);
+    };
+
     return (
         <div className="p-4 w-full h-auto space-y-4">
             {items.map((item) => (
@@ -35,7 +39,7 @@ export function BoxBase({ items, buttonOption }: BoxBaseProps) {
                         ) : (
                             <IconButton 
                                 aria-label="view"
-                                onClick={() => handleEdit(item.id)}
+                                onClick={() => handleView(item.id)}
                             >
                                 <VisibilityIcon />
                             </IconButton>

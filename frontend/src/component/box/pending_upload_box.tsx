@@ -1,7 +1,6 @@
 import React from 'react';
 import { BoxBase } from './box_base';
 import { pendingItems } from '../../data/receipts';
-import { PendingItem } from '../../types/receipt';
 
 export function PendingUploadBox() {
     return (

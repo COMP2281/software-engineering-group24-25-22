@@ -7,11 +7,11 @@ import { SaveButton } from '../buttons/save_button'
 import { displayToProperty } from '../../utils/fieldMapping';
 import { PendingItem } from '../../types/receipt';
 
-export function FieldTable() {
+export function FieldTable( {edit}: {edit: boolean} ) {
     const { id } = useParams<{ id: string }>();
     const fields = Object.values(displayToProperty);
     const numericId = parseInt(id || '0');
-    
+
     const foundItem = pendingItems.find(item => item.id === numericId) as PendingItem | undefined;
     const itemValues: Partial<PendingItem> = foundItem || {};
     
@@ -28,14 +28,18 @@ export function FieldTable() {
                             field={field}
                             initialValue={String(itemValues[field] || '')}
                             setFieldValues={setCurrentFieldValues}
+                            edit={edit}
                         />
-                        {field === 'address' && <LocationButton />}
+                        {field === 'address' && edit === true && <LocationButton />}
                     </div>
                 ))}
             </div>
-            <div className="flex justify-end mt-4">
-                <SaveButton itemID={numericId} fieldValues={currentFieldValues} />
-            </div>
+            {
+                edit === true && (
+                    <div className="flex justify-end mt-4">
+                    <SaveButton itemID={numericId} fieldValues={currentFieldValues} />
+                </div>
+            )} 
         </div>
     );
 }

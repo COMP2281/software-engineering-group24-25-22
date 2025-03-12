@@ -10,7 +10,7 @@ interface BoxBaseProps {
     progress: number;
 }
 
-export function ImageField({ progress }: BoxBaseProps) {
+export function ImageField({ progress, edit }: BoxBaseProps) {
     const { id } = useParams<{ id: string }>();
     const numericId = parseInt(id || '0');
     const foundItem = pendingItems.find(item => item.id === numericId);
@@ -31,9 +31,9 @@ export function ImageField({ progress }: BoxBaseProps) {
                     )}
                     <LinearProgress variant="determinate" value={progress} className="w-full mt-2" />
                 </div>
-                <div className="flex flex-row justify-between p-4 w-full">
+                <div className="flex flex-row justify-between p-4 w-full ">
                     <BackButton />
-                    <SubmitButton />
+                    {edit === true && <SubmitButton />}
                 </div>
             </div>
         </div>

@@ -2,7 +2,7 @@ import React from 'react'
 import Button from '@mui/material/Button';
 import { useParams, useNavigate } from 'react-router-dom'
 import { displayToProperty } from '../../utils/fieldMapping';
-import { pendingItems } from '../../data/receipts';
+import { pendingItems, finished_receipts } from '../../data/receipts';
 import { PendingItem } from '../../types/receipt';
 
 export function SubmitButton() {
@@ -14,14 +14,12 @@ export function SubmitButton() {
     const handleSubmit = () => { 
         const fieldValues: { [key: string]: string } = {};
         
-        // Get the existing item to preserve the image
         const existingItem = pendingItems.find(item => item.id === numericId);
         if (!existingItem) {
             console.error('Item not found');
             return;
         }
         
-        // Get values from text fields
         for (let i = 0; i < fields.length; i++) {
             const fieldId = `text-field-${numericId}-${fields[i]}`;
             const textField = document.getElementById(fieldId) as HTMLInputElement;
@@ -30,18 +28,20 @@ export function SubmitButton() {
             }
         }
 
-        // Update the item in pendingItems
+        const updatedItem: PendingItem = {
+            ...existingItem,
+            ...fieldValues,
+            id: numericId,
+            image: existingItem.image,
+            edit: false
+        };
+
         const itemIndex = pendingItems.findIndex(item => item.id === numericId);
         if (itemIndex !== -1) {
-            const updatedItem: PendingItem = {
-                ...existingItem,
-                ...fieldValues,
-                id: numericId,
-                image: existingItem.image // Preserve the image
-            };
-            pendingItems[itemIndex] = updatedItem;
-            console.log('Updated item:', updatedItem);
+            pendingItems.splice(itemIndex, 1);
         }
+
+        finished_receipts.push(updatedItem);
         
         navigate('/upload');
     };

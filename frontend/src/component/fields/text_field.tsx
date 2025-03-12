@@ -6,9 +6,10 @@ interface InputTextFieldProps {
     field: string;
     initialValue?: string;
     setFieldValues: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>;
+    edit: boolean;
 }
 
-export function InputTextField({ itemID, field, initialValue = '', setFieldValues }: InputTextFieldProps) {
+export function InputTextField({ itemID, field, initialValue = '', setFieldValues, edit }: InputTextFieldProps) {
     const [value, setValue] = useState(initialValue);
     const [error, setError] = useState(false);
     const [rows, setRows] = useState(3);
@@ -47,6 +48,7 @@ export function InputTextField({ itemID, field, initialValue = '', setFieldValue
                 variant="filled"
                 multiline
                 rows={rows}
+                disabled={!edit}
             />
         </div>
     );
