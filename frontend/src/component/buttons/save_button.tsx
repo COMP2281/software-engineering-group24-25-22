@@ -13,7 +13,6 @@ export function SaveButton({ itemID, fieldValues }: SaveButtonProps) {
     const navigate = useNavigate();
 
     const handleSubmit = () => {
-        
         const itemIndex = pendingItems.findIndex(item => item.id === itemID)
         if (itemIndex !== -1) {
             const updatedItem = { ...pendingItems[itemIndex] } as PendingItem;

@@ -33,7 +33,6 @@ export function SubmitButton() {
             ...fieldValues,
             id: numericId,
             image: existingItem.image,
-            edit: false
         };
 
         const itemIndex = pendingItems.findIndex(item => item.id === numericId);
