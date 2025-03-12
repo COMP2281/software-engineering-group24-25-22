@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.conf import settings
 from django.db.models import Q
 from celery import shared_task
+from apps.jobs.utils import temp_file_path
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +187,7 @@ def transfer_to_gridfs(job_id):
         job = ProcessingJob.objects.get(id=job_id)
         
         # Get file path
-        file_path = job.uploaded_file.path
+        file_path = temp_file_path(job)
         
         # Check if file exists
         if not os.path.exists(file_path):
@@ -196,7 +197,7 @@ def transfer_to_gridfs(job_id):
             return {'status': 'failed', 'error': error_msg}
         
         # Connect to MongoDB
-        client = MongoClient(settings.MONGO_CONNECTION_STRING)
+        client = MongoClient(f"mongodb://{settings.MONGODB_SOCKET}")
         db = client['receipt_scanner_db']
         
         # Create GridFS bucket
@@ -212,28 +213,27 @@ def transfer_to_gridfs(job_id):
             'confirmed_date': timezone.now()
         }
         
-        # Read the file from temp storage
+        # Properly use the MongoEngine FileField
         with open(file_path, 'rb') as f:
-            file_data = f.read()
+            # This directly uses MongoEngine's FileField to store in GridFS
+            job.uploaded_file.put(
+                f, 
+                filename=job.original_filename,
+                content_type=job.file_type,
+                metadata=metadata
+            )
         
-        # Store it in GridFS with metadata
-        gridfs_id = fs.put(
-            file_data, 
-            filename=job.original_filename,
-            content_type=job.file_type,
-            metadata=metadata
-        )
+        # Save the job to persist the uploaded file
+        job.save()
         
-        # Update job with the GridFS file ID
-        job.gridfs_id = str(gridfs_id)
-        job.storage_path = f"gridfs:{gridfs_id}"
-        
-        # Delete the temp file
+        # Delete the temp file after successful upload
         os.remove(file_path)
         
-        job.uploaded_file = None
-        job.save()
+        # Get the GridFS ID for the response
+        gridfs_id = job.uploaded_file.grid_id
 
+        print(gridfs_id)
+        
         # Log success
         logger.info(f"Successfully transferred job {job_id} to GridFS (id: {gridfs_id})")
         

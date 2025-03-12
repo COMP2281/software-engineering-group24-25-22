@@ -75,7 +75,7 @@ class ParserService:
         url = f"{self.base_url}/api/parser/confirm/{job_id}/"
         
         # Use MongoJSONEncoder to handle ObjectId and Decimal
-        from .json_utils import MongoJSONEncoder
+        from common.json_utils import MongoJSONEncoder
         
         # Prepare request data
         data = {'user_id': user_id}

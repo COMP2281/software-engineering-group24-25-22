@@ -59,6 +59,8 @@ class ParseReceiptView(APIView):
         if 'X-Receipt-Metadata' in request.headers:
             try:
                 metadata = json.loads(request.headers['X-Receipt-Metadata'])
+                metadata['extension_filename'] = os.path.splitext(metadata['original_filename'])[1]
+                del metadata['original_filename']
             except json.JSONDecodeError:
                 return Response(
                     {'error': 'Invalid metadata format'}, 
@@ -100,6 +102,9 @@ class ParseReceiptView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
             
+
+        print("METADATA")
+        print(json.dumps(metadata, indent=2))
         # Create a new processing job
         job = ProcessingJob(
             user_id=user_id,
@@ -116,7 +121,7 @@ class ParseReceiptView(APIView):
         job.save()
 
         # Save the uploaded file to a temporary location
-        with open(temp_file_path(job, file_obj.name), "wb") as tmp:
+        with open(temp_file_path(job), "wb") as tmp:
             for chunk in file_obj.chunks():
                 tmp.write(chunk)
 
@@ -213,7 +218,7 @@ class JobStatusView(APIView):
                 user_id = decoded_token.get('user_id')
                 
                 # Verify the user owns this job
-                if user_id and str(job.user_id) != str(user_id):
+                if user_id and str(job.id) != str(user_id):
                     return Response(
                         {'error': 'User ID does not match job owner'}, 
                         status=status.HTTP_403_FORBIDDEN
@@ -352,11 +357,13 @@ class ConfirmJobView(APIView):
         
         job.metadata['confirmed_at'] = timezone.now().isoformat()
         job.update_status('confirmed')
+
+        print(job.uploaded_file.grid_id)
         
         # Return the final receipt data
         return Response({
             'id': str(job.id),
-            'gridfs_id': job.gridfs_id,
+            'gridfs_id': transfer_result.get('gridfs_id', None),
             'receipt_data': job.processed_data
         })
     

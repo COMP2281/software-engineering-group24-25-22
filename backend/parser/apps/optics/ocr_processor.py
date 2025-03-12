@@ -5,6 +5,7 @@ from PIL import Image
 from pathlib import Path
 from django.utils import timezone
 from django.conf import settings
+import json
 
 from apps.jobs.models import ProcessingJob
 from apps.jobs.utils import temp_file_path
@@ -32,7 +33,7 @@ class OCRProcessor:
                  stored in the job record.
         """
         self.job = job
-        self.temp_file_path = temp_file_path(job, job.original_filename)
+        self.temp_file_path = temp_file_path(job)
     
     def process_file(self):
         """
@@ -59,6 +60,9 @@ class OCRProcessor:
         
         # Store results in job if available
         if self.job:
+            print("------------------------- PROCESSED DATA -----------------------")
+            print(json.dumps(result))
+            print("------------------------- PROCESSED DATA END -------------------")
             self.job.processed_data = result
             self.job.save()
         
@@ -153,6 +157,7 @@ class OCRProcessor:
                 # Store the OCR text in job metadata for template learning
                 if 'metadata' in dir(self.job) and hasattr(self.job, 'metadata'):
                     self.job.metadata['ocr_text'] = ocr_text
+                    self.job.metadata['ocr_text_preprocessed'] = TemplateSuite.preprocess_ocr_text(ocr_text)
             
             # Convert from API format to internal format
             processed_data = TemplateSuite.convert_to_internal_format(extracted_data)
