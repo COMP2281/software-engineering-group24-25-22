@@ -8,6 +8,7 @@ import LinearProgress from '@mui/material/LinearProgress';
 
 interface BoxBaseProps {
     progress: number;
+    edit: boolean;
 }
 
 export function ImageField({ progress, edit }: BoxBaseProps) {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Overview } from './pages/upload';
+import { Upload } from './pages/upload';
 import { DashBoard } from './pages/dashboard';
 import { Login } from './pages/login';
 import { Layout } from './component/layout/Layout';
@@ -15,7 +15,7 @@ const App: React.FC = () => {
         
         {/* Protected routes */}
         <Route element={<Layout />}>
-          <Route path="/upload" element={<Overview />} />
+          <Route path="/upload" element={<Upload />} />
           <Route path="/dashboard/:id" element={<DashBoard />} />
           <Route path="/dashboard/view/:id" element={<DashBoardView />} />
           <Route path="/dashboard" element={<DashBoard />} />
