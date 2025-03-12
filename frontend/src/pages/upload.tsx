@@ -8,9 +8,9 @@ import { ConvertToCSV } from '../component/buttons/convert_to_csv.tsx';
 export function Upload() {
     return (
         <div className="flex flex-col lg:flex-row lg:h-screen justify-center items-center p-8">
-            <div className="lg:w-1/2 flex justify-center items-center py-4 h-full">
+            <div className="lg:w-1/2 flex justify-center items-center h-full">
                     
-                <div className="w-fill gap-4 flex flex-col gap-y-8">
+                <div className="w-fill flex flex-col gap-y-4">
                     <ImageUpload />
                     <PendingUploadBox />
                     
