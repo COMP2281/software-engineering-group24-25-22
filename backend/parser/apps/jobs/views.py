@@ -173,7 +173,7 @@ class ParseReceiptView(APIView):
             return Response({
                 'id': str(job.id),
                 'status': job.status,
-                'processed_data': job.processed_data,
+                'extracted_data': job.extracted_data,
                 'ocr_confidence': job.ocr_confidence,
                 'needs_review': job.needs_review,
                 'processing_time': processing_time
@@ -241,9 +241,12 @@ class JobStatusView(APIView):
             'needs_review': job.needs_review,
         }
         
-        # Include processed data if available
-        if job.status == 'completed' and job.processed_data:
-            response_data['processed_data'] = job.processed_data
+        # Include extracted data and user corrections if available
+        if job.status == 'completed':
+            if job.extracted_data:
+                response_data['extracted_data'] = job.extracted_data
+            if job.user_corrections:
+                response_data['user_corrections'] = job.user_corrections
         
         # Include error message if failed
         if job.status == 'failed' and job.error_message:
@@ -318,21 +321,14 @@ class ConfirmJobView(APIView):
         except json.JSONDecodeError:
             pass
         
-        # Apply corrections to the processed data if provided
+        # Apply corrections if provided
         if corrections:
             # Store original data for template feedback
-            original_data = job.processed_data.copy() if job.processed_data else {}
+            original_data = job.extracted_data.copy() if job.extracted_data else {}
+
+            # Store the user corrections
+            job.user_corrections = corrections
             
-            # Update the processed data with corrections
-            processed_data = {} if job.processed_data is None else dict(job.processed_data)
-            
-            # Apply corrections
-            for key, value in corrections.items():
-                if value is not None:  # Only update fields that were provided
-                    processed_data[key] = value
-            
-            # Save the updated job data
-            job.processed_data = processed_data
             job.save()
             
             # Process template improvements with the corrections
@@ -364,7 +360,8 @@ class ConfirmJobView(APIView):
         return Response({
             'id': str(job.id),
             'gridfs_id': transfer_result.get('gridfs_id', None),
-            'receipt_data': job.processed_data
+            'extracted_data': job.extracted_data,
+            'user_corrections': job.user_corrections
         })
     
     def process_template_improvements(self, job, original_data, corrections):
@@ -385,7 +382,7 @@ class ConfirmJobView(APIView):
                 cache.set(cache_key, True, timeout=3600)  # 1 hour timeout
                 
                 # Get the original OCR text from job metadata or use a placeholder
-                ocr_text = job.metadata.get('ocr_text', 'No OCR text available')
+                ocr_text = job.metadata.get('ocr_text_preprocessed', 'No OCR text available')
                 
                 # Count corrected fields
                 corrected_fields = {}
@@ -407,17 +404,19 @@ class ConfirmJobView(APIView):
                     # Convert to API format using the service helpers
                     original_api_data = TemplateSuite.convert_to_api_format(original_data)
                     
-                    # Ensure processed_data is not None
-                    processed_data = job.processed_data if job.processed_data is not None else {}
+                    # Combine extracted data with user corrections to get the final data
+                    final_data = job.extracted_data.copy() if job.extracted_data else {}
+                    for key, value in job.user_corrections.items():
+                        if value is not None:
+                            final_data[key] = value
                     
                     # Corrected data in API format
-                    corrected_api_data = TemplateSuite.convert_to_api_format(processed_data)
+                    corrected_api_data = TemplateSuite.convert_to_api_format(final_data)
                     
                     # Process the correction through TemplateSuite
                     result = TemplateSuite.process_correction(
                         ocr_text=ocr_text,
                         template_id=job.template_used,
-                        original_data=original_api_data,
                         corrected_data=corrected_api_data
                     )
                     
@@ -560,18 +559,18 @@ class EditJobDataView(APIView):
         edited_data = json.loads(request.body)
         
         # Store original data for template feedback
-        original_data = job.processed_data.copy() if job.processed_data else {}
+        original_data = job.extracted_data.copy() if job.extracted_data else {}
         
-        # Merge edited data with existing data
-        processed_data: Dict[str, Any] = {} if job.processed_data is None else dict(job.processed_data)
+        # Update user corrections
+        user_corrections = {} if job.user_corrections is None else dict(job.user_corrections)
             
-        # Create a new dictionary with updated values
+        # Add the edited data to user corrections
         for key, value in edited_data.items():
             if value is not None:  # Only update fields that were provided
-                processed_data[key] = value
+                user_corrections[key] = value
         
-        # Assign the new dictionary to processed_data
-        job.processed_data = processed_data
+        # Assign the new corrections
+        job.user_corrections = user_corrections
         
         # Save the updated job
         job.save()
@@ -611,11 +610,14 @@ class EditJobDataView(APIView):
                     # Original data in API format
                     original_api_data = TemplateSuite.convert_to_api_format(original_data)
                     
-                    # Ensure processed_data is not None
-                    processed_data = job.processed_data if job.processed_data is not None else {}
+                    # Combine extracted data with user corrections to get the final data
+                    final_data = job.extracted_data.copy() if job.extracted_data else {}
+                    for key, value in job.user_corrections.items():
+                        if value is not None:
+                            final_data[key] = value
                     
                     # Corrected data in API format
-                    corrected_api_data = TemplateSuite.convert_to_api_format(processed_data)
+                    corrected_api_data = TemplateSuite.convert_to_api_format(final_data)
                     
                     # Process the correction through TemplateSuite
                     result = TemplateSuite.process_correction(
@@ -637,4 +639,14 @@ class EditJobDataView(APIView):
             except Exception as e:
                 logger.error(f"Error during template improvement: {e}", exc_info=True)
         
-        return Response(job.processed_data or {})
+        # Combine extracted data with user corrections to get the final data
+        final_data = job.extracted_data.copy() if job.extracted_data else {}
+        for key, value in job.user_corrections.items():
+            if value is not None:
+                final_data[key] = value
+                
+        return Response({
+            'extracted_data': job.extracted_data,
+            'user_corrections': job.user_corrections,
+            'final_data': final_data
+        })

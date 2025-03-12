@@ -212,7 +212,7 @@ class OCRTemplate:
         # Use the most common currency, fallback to default (GBP)
         if currency_counts:
             self.currency_symbol = currency_counts.most_common(1)[0][0]
-            self.currency_code = "unset"
+            self.currency_code = "N/A"
 
         logger.info(
             f"Detected currency: {self.currency_code} (symbol: {self.currency_symbol})")

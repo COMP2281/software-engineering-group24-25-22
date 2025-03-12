@@ -39,7 +39,8 @@ class ProcessingJob(Document):
     metadata = DictField(default=dict)
     
     # Processing details
-    processed_data = DictField(required=False)
+    extracted_data = DictField(required=False, help_text="Original data extracted by the OCR system")
+    user_corrections = DictField(required=False, help_text="Corrections made by the user")
     error_message = StringField(required=False)
     ocr_confidence = FloatField(default=0.0)
     needs_review = BooleanField(default=False)

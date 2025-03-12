@@ -63,7 +63,7 @@ class OCRProcessor:
             print("------------------------- PROCESSED DATA -----------------------")
             print(json.dumps(result))
             print("------------------------- PROCESSED DATA END -------------------")
-            self.job.processed_data = result
+            self.job.extracted_data = result
             self.job.save()
         
         return result
@@ -159,10 +159,7 @@ class OCRProcessor:
                     self.job.metadata['ocr_text'] = ocr_text
                     self.job.metadata['ocr_text_preprocessed'] = TemplateSuite.preprocess_ocr_text(ocr_text)
             
-            # Convert from API format to internal format
-            processed_data = TemplateSuite.convert_to_internal_format(extracted_data)
-            
-            return processed_data
+            return extracted_data
             
         except Exception as e:
             logger.error(f"Image processing error: {str(e)}")

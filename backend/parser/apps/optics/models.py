@@ -235,6 +235,9 @@ class ReceiptTemplate(Document):
     is_archived = BooleanField(default=False)
     archived_at = DateTimeField()
     
+    # Additional metadata including source template info
+    metadata = DictField(default=dict)
+    
     # Merchant identifiers
     merchant_name = StringField(max_length=255, required=True)
     

@@ -107,19 +107,106 @@ class ConfirmJobView(APIView):
             )
             
             # If confirmation successful, create a Receipt record in our database
-            # (This would typically be done in a service layer)
             from apps.receipts.models import Receipt, CostItem
+            from datetime import datetime
+            from decimal import Decimal
+            from django.utils import timezone
 
             # Ensure result is properly decoded
             if isinstance(result, bytes):
                 try:
                     result = json.loads(result.decode('utf-8'))
                 except json.JSONDecodeError:
-                    # TODO: Improve the error handling.
                     # If we can't decode as JSON, return as is
                     return Response({"message": "Receipt confirmed", "data": result})
             
-            receipt_data = result.get('receipt_data', {})
+            # Extract data from the parser response
+            extracted_data = result.get('extracted_data', {})
+            user_corrections = result.get('user_corrections', {})
+            gridfs_id = result.get('gridfs_id')
+
+            print("extracted_data", extracted_data)
+            print("user_corrections", user_corrections)
+            
+            # Combine extracted data with user corrections to get final data
+            final_data = {**extracted_data}
+            if user_corrections:
+                final_data.update(user_corrections)
+            
+            # Parse date string to datetime object
+            transaction_time = None
+            date_str = final_data.get('transaction_time')
+            if date_str:
+                try:
+                    # Try different date formats
+                    date_formats = [
+                        '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', 
+                        '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S'
+                    ]
+                    
+                    for fmt in date_formats:
+                        try:
+                            transaction_time = datetime.strptime(date_str, fmt)
+                            break
+                        except ValueError:
+                            continue
+                except Exception as e:
+                    # Fallback to current time if date parsing fails
+                    transaction_time = timezone.now()
+            else:
+                transaction_time = timezone.now()
+            
+            # Convert decimal strings to Decimal objects
+            total_amount = Decimal(str(final_data.get('total_amount', '0.00') or '0.00'))
+            tax_amount = Decimal(str(final_data.get('tax_amount', '0.00') or '0.00'))
+            subtotal_amount = Decimal(str(final_data.get('subtotal_amount', '0.00') or '0.00'))
+            
+            # Create the Receipt instance
+            receipt = Receipt(
+                merchant_name=final_data.get('merchant_name', 'Unknown Merchant'),
+                transaction_time=transaction_time,
+                merchant_address=final_data.get('merchant_address', ''),
+                reference_number=final_data.get('reference_number', ''),
+                tax_amount=tax_amount,
+                category=final_data.get('category', 'Uncategorized'),
+                description=final_data.get('description', ''),
+                total_amount=total_amount,
+                subtotal_amount=subtotal_amount,
+                currency=final_data.get('currency', 'GBP'),
+                employee=request.user,
+                original_filename=final_data.get('original_filename', 'receipt.jpg'),
+                file_type=final_data.get('file_type', 'image/jpeg'),
+                file_id=str(gridfs_id) if gridfs_id else '',
+                ocr_confidence=final_data.get('ocr_confidence', 0.0),
+                needs_review=final_data.get('needs_review', False),
+                updated_at=timezone.now()
+            )
+
+            # Use whichever has items
+            items_to_process = final_data.get("cost_items", [])           
+            print(items_to_process)
+            # Create embedded cost items
+            for item in items_to_process:
+                # Handle both API and internal format field names
+                item_name = item.get('item_name', "Unknown Item")
+                unit_price = item.get('unit_price', '0.00')
+                # API format uses 'total', internal format uses 'total_price'
+                total_price = item.get('total_price', item.get('total', '0.00'))
+                # Handle different quantity field names and formats
+                quantity = item.get('quantity', '1')
+                
+                # Add item to receipt using helper method
+                receipt.add_cost_item(
+                    item_name=item_name,
+                    unit_price=Decimal(str(unit_price or '0.00')),
+                    quantity=Decimal(str(quantity or '1')),
+                    total_price=Decimal(str(total_price or '0.00'))
+                )
+
+            receipt.save()
+            
+            # Add receipt to the result
+            result['receipt_id'] = str(receipt.pk)
             
             # Create and return the formatted response
             return Response(result)

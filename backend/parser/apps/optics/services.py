@@ -257,22 +257,36 @@ class TemplateSuite:
         return list(generic_templates)
 
     @staticmethod
-    def create_template_from_correction(ocr_text: str, corrected_values: OCRTemplateCorrection) -> ReceiptTemplate:
+    def create_template_from_correction(ocr_text: str, corrected_values: OCRTemplateCorrection, 
+                                      source_template_id: Optional[str] = None) -> ReceiptTemplate:
         """
         Create a new template based on user corrections.
 
         Args:
             ocr_text: The original OCR text
             corrected_values: User-corrected values
+            source_template_id: Optional ID of the template that was used for the original extraction
 
         Returns:
             Newly created template
         """
-        # Create OCR template
+        # Create OCR template from user corrected_values
         ocr_template = OCRTemplate(ocr_text, corrected_values)
 
         # Convert to model format
         template_data = ocr_template.to_model_data()
+
+        # Track source template information in metadata if provided
+        metadata = {}
+        if source_template_id:
+            metadata['derived_from_template_id'] = source_template_id
+            metadata['correction_timestamp'] = timezone.now().isoformat()
+            try:
+                source_template = ReceiptTemplate.objects.get(id=source_template_id)
+                metadata['source_template_merchant'] = source_template.merchant_name
+                metadata['source_template_success_rate'] = source_template.success_rate
+            except ReceiptTemplate.DoesNotExist:
+                metadata['source_template_found'] = False
 
         # Create new template
         template = ReceiptTemplate(
@@ -281,13 +295,19 @@ class TemplateSuite:
             field_extractors=template_data['field_extractors'],
             item_patterns=template_data['item_patterns'],
             field_accuracy=template_data['field_accuracy'],
+            metadata=metadata,
             usage_count=1,
             success_rate=80.0  # Initial success rate (optimistic)
         )
 
         template.save()
-        logger.info(
-            f"Created new template for {template_data['merchant_name']}")
+        
+        if source_template_id:
+            logger.info(
+                f"Created new template for {template_data['merchant_name']} derived from template {source_template_id}")
+        else:
+            logger.info(
+                f"Created new template for {template_data['merchant_name']}")
 
         return template
 
@@ -661,38 +681,16 @@ class TemplateSuite:
         print("EXTRACTED_DATA", extracted_data)
         print("--------------------- EXTRACTED DATA END ---------------------------")
 
-        # Map fields to expected response format
-        receipt_data = {
-            "merchant_name": extracted_data.get('merchant_name', ''),
-            "date": extracted_data.get('transaction_time', ''),
-            "total_amount": extracted_data.get('total_amount', ''),
-            "address": extracted_data.get('merchant_address', ''),
-            "reference": extracted_data.get('reference_number', ''),
-            "tax": extracted_data.get('tax_amount', ''),
-            "subtotal_amount": extracted_data.get('subtotal_amount', ''),
-            "cost_list": []
-        }
-
-        # Add line items if present
-        if 'cost_items' in extracted_data:
-            for item in extracted_data['cost_items']:
-                receipt_data['cost_list'].append({
-                    "quantity": item.get('quantity', '1'),
-                    "item": item.get('item_name', ''),
-                    "total": item.get('total_price', ''),
-                    "unit_price": item.get("unit_price", "")
-                })
-
         # Calculate confidence based on fields extracted
         expected_fields = len(template.field_extractors) if template.field_extractors else 1
         extracted_fields = sum(1 for k, v in extracted_data.items() if v and k != 'cost_items')
         confidence = (extracted_fields / expected_fields * 100) if expected_fields > 0 else 0
         
         # Determine if user review is needed
-        needs_review = confidence < 80 or not receipt_data['merchant_name'] or not receipt_data['total_amount']
+        needs_review = confidence < 80 or not extracted_data['merchant_name'] or not extracted_data['total_amount']
 
         return {
-            "extracted_data": receipt_data,
+            "extracted_data": extracted_data,
             "template_id": template.pk,
             "confidence": confidence,
             "needs_review": needs_review
@@ -700,7 +698,6 @@ class TemplateSuite:
         
     @staticmethod
     def process_correction(ocr_text: str, template_id: Optional[str], 
-                          original_data: Dict[str, Any], 
                           corrected_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Direct interface for processing user corrections to improve templates.
@@ -708,8 +705,7 @@ class TemplateSuite:
         
         Args:
             ocr_text: Original OCR text
-            template_id: ID of template used (optional)
-            original_data: Original extracted data (in API format)
+            template_id: ID of template used (optional) - used for reference only, never updated
             corrected_data: User corrected data (in API format)
             
         Returns:
@@ -736,32 +732,23 @@ class TemplateSuite:
             category=corrected_data.get('category', '')
         )
         
-        # If template ID provided, update existing template
+        # Log information about the original template
         if template_id:
             try:
-                template = ReceiptTemplate.objects.get(id=template_id)
-                
-                # If template is archived, resurrect it
-                if template.is_archived:
-                    TemplateSuite.resurrect_template_if_needed(int(template_id))
-                
-                # Update template with corrections
-                TemplateSuite.update_template_after_correction(
-                    template, ocr_text, original_data, corrected_values
-                )
-                
-                template_action = "updated"
-                result_template = template
+                # Only check if template exists, but never modify it
+                ReceiptTemplate.objects.get(id=template_id)
+                logger.info(f"Creating new template based on corrections to template {template_id}")
             except ReceiptTemplate.DoesNotExist:
-                # If template not found, create new one
-                template = TemplateSuite.create_template_from_correction(ocr_text, corrected_values)
-                template_action = "created"
-                result_template = template
-        else:
-            # No template ID provided, create new one
-            template = TemplateSuite.create_template_from_correction(ocr_text, corrected_values)
-            template_action = "created"
-            result_template = template
+                logger.warning(f"Original template {template_id} not found, creating new template from corrections")
+        
+        # Always create a new template from corrections, passing source template_id
+        template = TemplateSuite.create_template_from_correction(
+            ocr_text, 
+            corrected_values,
+            source_template_id=template_id
+        )
+        template_action = "created"
+        result_template = template
         
         return {
             "success": True,
@@ -824,9 +811,6 @@ class TemplateSuite:
         Returns:
             Dict with data in API format
         """
-        # Ensure internal_data is a dictionary
-        if not isinstance(internal_data, dict):
-            internal_data = {}
             
         api_data = {
             'merchant_name': internal_data.get('merchant_name', ''),

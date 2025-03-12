@@ -199,5 +199,14 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Cache settings
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-mindset',
+        'TIMEOUT': 3600,  # 1 hour default timeout
+    }
+}
+
 # API Authentication Key
 API_KEY = 'test_api_key'
