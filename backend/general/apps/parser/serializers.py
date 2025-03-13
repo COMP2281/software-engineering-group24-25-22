@@ -56,3 +56,9 @@ class ReceiptDataSerializer(serializers.Serializer):
         child=CostItemSerializer(),
         required=False
     )
+    
+class ConfirmJobSerializer(serializers.Serializer):
+    """Serializer for job confirmation request"""
+    corrections = ReceiptDataSerializer(required=False)
+    descriptions = serializers.DictField(required=False, 
+                                        help_text="Additional descriptive fields like category and description")

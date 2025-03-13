@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
 from .services import ParserService, ParserServiceError
-from .serializers import ReceiptUploadSerializer
+from .serializers import ReceiptUploadSerializer, ConfirmJobSerializer
 from bson import ObjectId
 
 class ReceiptParseView(APIView):
@@ -90,13 +90,26 @@ class ConfirmJobView(APIView):
     """
     API endpoint for confirming processed receipt data
     """
+    parser_classes = (JSONParser,)
+    
     permission_classes = [IsAuthenticated]
     
     def post(self, request, job_id):
+        # Validate the request data
+        serializer = ConfirmJobSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {'error': 'Invalid data format', 'details': serializer.errors}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Get the validated data
+        valid_data = serializer.validated_data
+        
         try:
             # Get corrections from request if any
-            corrections = request.data.get('corrections', None)
-            descriptions = request.data.get('descriptions', None)
+            corrections = valid_data.get('corrections', {})
+            descriptions = valid_data.get('descriptions', {})
             
             # Get user's JWT token
             auth_header = request.headers.get('Authorization')
