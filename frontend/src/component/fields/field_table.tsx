@@ -1,57 +1,45 @@
-import React from 'react'
-
+import React, { useState } from 'react'
+import { useParams } from 'react-router-dom'
+import { pendingItems } from '../../data/receipts';
 import { InputTextField } from './text_field';
 import { LocationButton } from '../buttons/location_button'
+import { SaveButton } from '../buttons/save_button'
+import { displayToProperty } from '../../utils/fieldMapping';
+import { PendingItem } from '../../types/receipt';
 
-const oneItem = {title: 'Receipt1', description: 'Pending stuff stuff stuff'}
-const pendingItems = [
-    {
-        title: 'Receipt1',
-        description: 'Pending stuff stuff stuff',
-    },
-    {
-        title: 'Receipt2',
-        description: 'More pending stuff new stuff',
-    },
-    {
-        title: 'Receipt3',
-        description: 'More pending stuff new stuff',
-    },
-    {
-        title: 'Receipt4',
-        description: 'More pending stuff new stuff',
-    },
-    {
-        title: 'Receipt5',
-        description: 'More pending stuff new stuff',
-    },
-];
+export function FieldTable( {edit}: {edit: boolean} ) {
+    const { id } = useParams<{ id: string }>();
+    const fields = Object.values(displayToProperty);
+    const numericId = parseInt(id || '0');
 
-interface FieldTableProps {
-    setFieldValues: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>;
-}
-
-export function FieldTable({ setFieldValues }: FieldTableProps) {
-    const fields = [
-        "Merchant Name",
-        "Time",
-        "Address",
-        "Ref",
-        "Total Cost",
-        "Description (Manual)",
-        "Tax",
-        "Category (Manual)"
-    ];
-
+    const foundItem = pendingItems.find(item => item.id === numericId) as PendingItem | undefined;
+    const itemValues: Partial<PendingItem> = foundItem || {};
+    
+    const [currentFieldValues, setCurrentFieldValues] = useState<{ [key: string]: string }>({});
+    
     return (
-        <div className="grid grid-cols-2 gap-4 w-full p-4 bg-white shadow-lg rounded-lg ">
-            {fields.map((field) => (
-                <div key={field} className="flex flex-col gap-2">
-                    <label className="text-xl font-semibold">{field}</label>
-                    <InputTextField itemID={field} setFieldValues={setFieldValues} />
-                    {field == 'Address' ? <LocationButton/> : ''}
+        <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-4 w-full p-4 bg-white shadow-lg rounded-lg">
+                {fields.map((field) => (
+                    <div key={field} className="flex flex-col gap-2">
+                        <label className="text-xl font-semibold">{field}</label>
+                        <InputTextField 
+                            itemID={numericId}
+                            field={field}
+                            initialValue={String(itemValues[field] || '')}
+                            setFieldValues={setCurrentFieldValues}
+                            edit={edit}
+                        />
+                        {field === 'address' && edit === true && <LocationButton />}
+                    </div>
+                ))}
+            </div>
+            {
+                edit === true && (
+                    <div className="flex justify-end mt-4">
+                    <SaveButton itemID={numericId} fieldValues={currentFieldValues} />
                 </div>
-            ))}
+            )} 
         </div>
     );
 }

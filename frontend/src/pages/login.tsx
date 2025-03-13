@@ -1,5 +1,5 @@
 import React from 'react'
-import { LoginInputFields } from '../component/login_input_fields';
+import { LoginInputFields } from '../component/fields/login_input_fields';
 import { LoginButton } from '../component/buttons/login_button';
 
 const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
