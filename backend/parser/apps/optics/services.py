@@ -129,20 +129,20 @@ class TemplateSuite:
         return text
     
     @staticmethod
-    def find_best_merchant_match(receipt_text: str, threshold=70):
+    def find_best_merchant_match(receipt_text: str, merchant_list: Optional[List[ReceiptTemplate]] = None, threshold=70):
         """
         Find the best matching merchant from database using fuzzy matching.
         
         Args:
             receipt_text: First 3 lines of receipt text
-            merchant_list: Optional list of merchant names (fetched if None)
             threshold: Minimum score (0-100) to consider a match
             
         Returns:
             Tuple of (best_match, score) or (None, 0) if no good match
         """
         # Get merchant list if not provided
-        merchant_list = list(ReceiptTemplate.objects.distinct('merchant_name'))
+        if not merchant_list:
+            merchant_list = list(ReceiptTemplate.objects.distinct('merchant_name'))
             
         # No merchants to compare with
         if not merchant_list:
@@ -210,10 +210,7 @@ class TemplateSuite:
             ).distinct('merchant_name'))
             
             # Find best fuzzy match
-            best_match, score = TemplateSuite.find_best_merchant_match(
-                first_lines, 
-                merchant_list=active_merchants
-            )
+            best_match, score = TemplateSuite.find_best_merchant_match(first_lines, active_merchants)
             
             if best_match:
                 logger.info(f"Found fuzzy match for '{merchant_name}': '{best_match}' (score: {score})")
@@ -237,16 +234,49 @@ class TemplateSuite:
         if basic_fuzzy_matches.count() > 0:
             return list(basic_fuzzy_matches)
 
-        # If still no matches, check archived templates
-        archived_matches = ReceiptTemplate.objects(
-            Q(merchant_name__iexact=merchant_name) |
-            Q(merchant_name__icontains=merchant_name.split()
-              [0] if merchant_name.split() else ""),
+        # If still no matches, check archived templates with fuzzy matching
+        # First try exact match with archived templates
+        archived_exact_matches = ReceiptTemplate.objects(
+            merchant_name__iexact=merchant_name,
             is_archived=True
         ).order_by('-usage_count')[:limit]
 
-        if archived_matches.count() > 0:
-            return list(archived_matches)
+        if archived_exact_matches.count() > 0:
+            return list(archived_exact_matches)
+            
+        # If receipt text is provided, try fuzzy matching with archived templates
+        if receipt_text:
+            # Get first 3 lines for merchant matching
+            receipt_lines = receipt_text.strip().split('\n')
+            first_lines = '\n'.join(receipt_lines[:min(3, len(receipt_lines))])
+            
+            # Get all archived merchant names
+            archived_merchants = list(ReceiptTemplate.objects(
+                is_archived=True
+            ).distinct('merchant_name'))
+            
+            # Find best fuzzy match
+            best_match, score = TemplateSuite.find_best_merchant_match(first_lines, merchant_list=archived_merchants)
+            
+            if best_match:
+                logger.info(f"Found fuzzy match in archived templates for '{merchant_name}': '{best_match}' (score: {score})")
+                
+                archived_fuzzy_matches = ReceiptTemplate.objects(
+                    merchant_name=best_match,
+                    is_archived=True
+                ).order_by('-usage_count')[:limit]
+                
+                if archived_fuzzy_matches.count() > 0:
+                    return list(archived_fuzzy_matches)
+        
+        # Fall back to basic fuzzy matching with archived templates
+        archived_basic_matches = ReceiptTemplate.objects(
+            merchant_name__icontains=merchant_name.split()[0] if merchant_name.split() else "",
+            is_archived=True
+        ).order_by('-usage_count')[:limit]
+
+        if archived_basic_matches.count() > 0:
+            return list(archived_basic_matches)
 
         # If no matches at all, return generic templates
         # Assuming generic templates have merchant_name = 'Generic'
