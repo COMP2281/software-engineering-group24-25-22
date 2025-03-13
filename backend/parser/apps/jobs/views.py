@@ -326,16 +326,13 @@ class ConfirmJobView(APIView):
         
         # Apply corrections if provided
         if corrections:
-            # Store original data for template feedback
-            original_data = job.extracted_data.copy() if job.extracted_data else {}
-
             # Store the user corrections
             job.user_corrections = corrections
             
             job.save()
             
             # Process template improvements with the corrections
-            self.process_template_improvements(job, original_data, corrections)
+            self.process_template_improvements(job, corrections)
         
         # Transfer to permanent storage and create records
         from .tasks import transfer_to_gridfs
@@ -368,7 +365,7 @@ class ConfirmJobView(APIView):
             'user_corrections': job.user_corrections
         })
     
-    def process_template_improvements(self, job, original_data, corrections):
+    def process_template_improvements(self, job: ProcessingJob, corrections: Dict[str, Any]):
         """Process template improvements based on user corrections"""
         # Only proceed if there are corrections
         if not corrections:
@@ -385,43 +382,20 @@ class ConfirmJobView(APIView):
                 # Set flag to prevent duplicate processing
                 cache.set(cache_key, True, timeout=3600)  # 1 hour timeout
                 
-                # Get the original OCR text from job metadata or use a placeholder
-                ocr_text = job.metadata.get('ocr_text_preprocessed', 'No OCR text available')
-                
-                # Count corrected fields
-                corrected_fields = {}
-                for key, value in corrections.items():
-                    if key in original_data and original_data[key] != value:
-                        corrected_fields[key] = {
-                            'original': original_data[key],
-                            'corrected': value
-                        }
-                
                 # Log the correction details
                 logger.info(
-                    f"User corrected {len(corrected_fields)} fields for job {job.id}. "
+                    f"User submitted {len(corrections.keys())} fields for job {job.id}. "
                     f"Sending corrections to template system."
                 )
                 
                 # Only proceed if there's a template to improve and corrections were made
-                if job.template_used and corrected_fields:
-                    # Convert to API format using the service helpers
-                    original_api_data = TemplateSuite.convert_to_api_format(original_data)
-                    
-                    # Combine extracted data with user corrections to get the final data
-                    final_data = job.extracted_data.copy() if job.extracted_data else {}
-                    for key, value in job.user_corrections.items():
-                        if value is not None:
-                            final_data[key] = value
-                    
-                    # Corrected data in API format
-                    corrected_api_data = TemplateSuite.convert_to_api_format(final_data)
-                    
+                if job.template_used and len(corrections.keys()):
+
                     # Process the correction through TemplateSuite
                     result = TemplateSuite.process_correction(
-                        ocr_text=ocr_text,
                         template_id=job.template_used,
-                        corrected_data=corrected_api_data
+                        extracted_data=job.extracted_data.copy(),
+                        corrected_data=corrections
                     )
                     
                     # Check if the template was updated successfully

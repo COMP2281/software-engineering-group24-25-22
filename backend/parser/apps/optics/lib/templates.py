@@ -20,7 +20,7 @@ class OCRTemplateCorrection(TypedDict):
     total_amount: str
     address: str
     reference: str
-    cost_list: List[OCRTemplateCostList]
+    cost_items: List[OCRTemplateCostList]
     description: str
     tax: str
     category: str

@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Literal, Optional, Tuple
 import logging
 from datetime import timedelta
 from django.utils import timezone
@@ -296,7 +296,7 @@ class TemplateSuite:
             item_patterns=template_data['item_patterns'],
             field_accuracy=template_data['field_accuracy'],
             metadata=metadata,
-            usage_count=1,
+            usage_count=0, # Initial usage is 0, this wasn't used yet. The original one was used.
             success_rate=80.0  # Initial success rate (optimistic)
         )
 
@@ -400,7 +400,7 @@ class TemplateSuite:
     @staticmethod
     def update_template_after_correction(template: ReceiptTemplate, ocr_text: str,
                                          extracted_data: Dict[str, Any],
-                                         corrected_data: OCRTemplateCorrection) -> ReceiptTemplate:
+                                         corrected_data: OCRTemplateCorrection) -> ReceiptTemplate | Literal[True]:
         """
         Update template performance metrics after user correction.
         If needed, create new patterns based on the correction.
@@ -409,50 +409,36 @@ class TemplateSuite:
             template: Template that was used
             ocr_text: Original OCR text
             extracted_data: Data extracted by the template
-            corrected_data: User-corrected data
+            corrected_data: User-corrected data (partial)
 
         Returns:
-            Updated template
+            The new template if significant corrections were found, or True if no new template needed.
         """
         # Calculate accuracy for each field
         field_corrections = {}
 
         # Compare extracted vs corrected values
-        for field in template.field_extractors.keys():
+        for field, value in template.field_extractors.iitems():
             extracted = extracted_data.get(field)
-            corrected = None
+            corrected = corrected_data.get(field, None)
 
-            # Map field names between systems
-            if field == 'merchant_name':
-                corrected = corrected_data.get('merchant_name')
-            elif field == 'transaction_time':
-                corrected = corrected_data.get('date')
-            elif field == 'merchant_address':
-                corrected = corrected_data.get('address')
-            elif field == 'reference_number':
-                corrected = corrected_data.get('reference')
-            elif field == 'tax_amount':
-                corrected = corrected_data.get('tax')
-            elif field == 'total_amount':
-                corrected = corrected_data.get('total_amount')
-            elif field == 'subtotal_amount':
-                corrected = corrected_data.get('subtotal_amount')
+            if corrected is None:
+                continue
 
-            # If field was corrected, update accuracy and edit distance
-            if corrected is not None and extracted != corrected:
+            extracted_str = str(extracted) if extracted else ""
+            corrected_str = str(corrected)
+
+            similarity = fuzz.ratio(extracted_str.lower(), corrected_str.lower())
+
+            # If similarity is below 85, consider it a correction
+            if similarity < 85:
                 field_corrections[field] = False
                 template.calculate_updated_accuracy(field, False)
-                # Track edit distance between extracted and corrected values
-                # Convert None to empty string if needed
-                extracted_str = str(extracted) if extracted is not None else ""
-                corrected_str = str(corrected)
-                template.update_edit_distance(field, extracted_str, corrected_str)
-            elif extracted is not None:
+            else:
                 field_corrections[field] = True
                 template.calculate_updated_accuracy(field, True)
-                # Even matching fields contribute to edit distance stats (with 0 distance)
-                extracted_str = str(extracted)
-                template.update_edit_distance(field, extracted_str, extracted_str)
+
+            template.update_edit_distance(field, extracted_str, corrected_str)
 
         # Update overall success rate and override rate
         correct_fields = sum(
@@ -483,9 +469,9 @@ class TemplateSuite:
         corrected_items_count = 0
         extracted_items_count = 0
         
-        if 'cost_items' in extracted_data and 'cost_list' in corrected_data:
+        if 'cost_items' in extracted_data or 'cost_items' in corrected_data:
             extracted_items = extracted_data.get('cost_items', [])
-            corrected_items = corrected_data.get('cost_list', [])
+            corrected_items = corrected_data.get('cost_items', [])
             extracted_items_count = len(extracted_items)
             corrected_items_count = len(corrected_items)
             
@@ -497,21 +483,46 @@ class TemplateSuite:
                 # Even if count is the same, check for content differences
                 # This is a simplified check - in reality would need to match items
                 for i, (extracted, corrected) in enumerate(zip(extracted_items, corrected_items)):
-                    extracted_name = extracted.get('item_name', '')
-                    if not extracted_name:
-                        extracted_name = extracted.get('item', '')
-                    
-                    corrected_name = corrected.get('item', '')
-                    
-                    # Check if names are significantly different
-                    if extracted_name != corrected_name and not (extracted_name in corrected_name or corrected_name in extracted_name):
+                    # Item name check (still use fuzzy matching to test similarity)
+                    extracted_name = extracted.get('item_name', False)
+                    corrected_name = corrected.get('item_name', '')
+                    name_similarity = fuzz.ratio(extracted_name.lower(), corrected_name.lower())
+                    if name_similarity < 85:
                         cost_items_corrected = True
-                        logger.info(f"Cost item content corrected: '{extracted_name}' to '{corrected_name}'")
                         break
 
+                    # Quantity check - assume it's corrected if value difference test throws.
+                    try:
+                        extracted_qty = float(extracted.get('quantity', '1') or '1')
+                        corrected_qty = float(corrected.get('quantity', '1') or '1')
+                        if abs(extracted_qty - corrected_qty) > 0.001:
+                            cost_items_corrected = True
+                            break
+                    except (ValueError, TypeError):
+                        cost_items_corrected = True
+                        break
+
+                    # Price check - assume it's corrected if value difference test throws.
+                    try:
+                        extracted_price = float(extracted.get('total_price', '0') or '0')
+                        corrected_price = float(corrected.get('total_price', '0') or '0')
+                        price_percent_diff = abs(extracted_price - corrected_price) / max(extracted_price, corrected_price, 0.01) * 100
+                        if price_percent_diff > 2.0:
+                            cost_items_corrected = True
+                            break
+                    except (ValueError, TypeError):
+                        # Can't convert to number? Automatic correction
+                        cost_items_corrected = True
+                        break
+
+                # Log the first item that was first seen as corrected
+                if cost_items_corrected:
+                    logger.info(f"Cost item ({i}) corrected: extracted {json.dumps(extracted)} vs corrected {json.dumps(corrected)}")
+                    
+
         # Always create a new template if cost items were corrected
-        # OR if multiple fields were corrected
-        if cost_items_corrected or significant_corrections > 0:
+        # OR if more than 1 field was corrected
+        if cost_items_corrected or significant_corrections > 1:
             # Create a new template from the correction
             new_template = TemplateSuite.create_template_from_correction(ocr_text, corrected_data)
             
@@ -522,36 +533,9 @@ class TemplateSuite:
             
             # Return the new template instead of the updated one
             return new_template
+        else:
+            return True
         
-        # For no corrections (which shouldn't happen often), update the existing template
-        # Create a temporary template to extract any updated patterns
-        new_ocr_template = OCRTemplate(ocr_text, corrected_data)
-        new_data = new_ocr_template.to_model_data()
-        
-        # Find which field was corrected (if any)
-        corrected_field = None
-        for field, correct in field_corrections.items():
-            if not correct:
-                corrected_field = field
-                break
-        
-        # Update the corrected field if one exists
-        if corrected_field and corrected_field in new_data['field_extractors']:
-            template.field_extractors[corrected_field] = new_data['field_extractors'][corrected_field]
-            logger.info(f"Updated pattern for field '{corrected_field}' in template {template.pk}")
-        
-        # This section is now less likely to be reached, but kept for completeness
-        if 'cost_items' in extracted_data and 'cost_list' in corrected_data and new_data['item_patterns']:
-            template.item_patterns = new_data['item_patterns']
-            template.has_line_items = new_data['has_line_items']
-            if 'line_items_start_line' in new_data:
-                template.line_items_start_line = new_data['line_items_start_line']
-            logger.info(f"Updated line item patterns in template {template.pk}")
-
-        # Save updated template
-        template.save()
-
-        return template
 
     @staticmethod
     def evaluate_templates_for_archiving():
@@ -694,65 +678,78 @@ class TemplateSuite:
         }
         
     @staticmethod
-    def process_correction(ocr_text: str, template_id: Optional[str], 
-                          corrected_data: Dict[str, Any]) -> Dict[str, Any]:
+    def process_correction(template_id: str, 
+                           extracted_data: Dict[str, Any],corrected_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Direct interface for processing user corrections to improve templates.
         This avoids needing to use the view directly.
         
         Args:
-            ocr_text: Original OCR text
-            template_id: ID of template used (optional) - used for reference only, never updated
-            corrected_data: User corrected data (in API format)
+            template_id: ID of the template to update statistics and derive from.
+            extracted_data: The extracted fields from the original OCR text
+            corrected_data: The user's partial corrections of extracted fields
             
         Returns:
             Dict with result information
         """
         # Validate input
-        if not ocr_text or not corrected_data:
+        if not corrected_data:
             return {
-                "error": "OCR text and corrected data are required",
+                "error": "Corrected data is required",
                 "success": False
             }
         
         # Convert corrected data to expected format
         corrected_values = OCRTemplateCorrection(
             merchant_name=corrected_data.get('merchant_name', ''),
-            date=corrected_data.get('date', ''),
+            date=corrected_data.get('transaction_time', ''),
+            address=corrected_data.get('merchant_address', ''),
+            reference=corrected_data.get('reference_number', ''),
             total_amount=corrected_data.get('total_amount', ''),
-            address=corrected_data.get('address', ''),
-            reference=corrected_data.get('reference', ''),
-            tax=corrected_data.get('tax', ''),
             subtotal_amount=corrected_data.get('subtotal_amount', ''),
-            cost_list=corrected_data.get('cost_list', []),
+            cost_items=corrected_data.get('cost_items', []),
+            tax=corrected_data.get('tax_amount', ''),
             description=corrected_data.get('description', ''),
             category=corrected_data.get('category', '')
         )
-        
-        # Log information about the original template
+
+        template_result: ReceiptTemplate | Literal[True] = True
+
+        # Check if template ID is provided
         if template_id:
             try:
-                # Only check if template exists, but never modify it
-                ReceiptTemplate.objects.get(id=template_id)
-                logger.info(f"Creating new template based on corrections to template {template_id}")
+                # Get the template, to update it and maybe create a new template
+                # We must ensure to take the latest object.
+                template = ReceiptTemplate.objects.get(id=template_id)
+                template_result = TemplateSuite.update_template_after_correction(template, template.ocr_text_preprocessed, extracted_data, corrected_values)
             except ReceiptTemplate.DoesNotExist:
-                logger.warning(f"Original template {template_id} not found, creating new template from corrections")
+                return {
+                        "success": False,
+                        "error": f"Original template {template_id} not found"
+                }
+        else:
+            return {
+                "success": False,
+                "error": "Original template ID is required"
+            }
+
+
+        if template_result == True:
+            return {
+                "success": True,
+                "template_id": template_id,
+                "template_action": "updated",
+                "message": f"Original template statistics succesfully updated"
+            }
+        elif isinstance(template_result, ReceiptTemplate):
+            return {
+                "success": True,
+                "template_id_old": template_id,
+                "template_id": template_result.pk,
+                "template_action": "created",
+                "message": "Original template statistics succesfully updated and new template based off significant corrections has been created"
+            }
         
-        # Always create a new template from corrections, passing source template_id
-        template = TemplateSuite.create_template_from_correction(
-            ocr_text, 
-            corrected_values,
-            source_template_id=template_id
-        )
-        template_action = "created"
-        result_template = template
-        
-        return {
-            "success": True,
-            "template_id": result_template.pk,
-            "template_action": template_action,
-            "message": f"Template successfully {template_action}"
-        }
         
     @staticmethod
     def convert_to_internal_format(api_data: Dict[str, Any]) -> Dict[str, Any]:
