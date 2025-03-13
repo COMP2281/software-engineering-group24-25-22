@@ -1,4 +1,5 @@
 from mongoengine import Document, StringField, DateTimeField, FloatField, BooleanField, FileField, DecimalField, ReferenceField, CASCADE, NULLIFY, EmbeddedDocument, EmbeddedDocumentField, ListField
+from common.models.templates import ReceiptTemplate
 from django.utils import timezone
 from decimal import Decimal
 
@@ -38,6 +39,8 @@ class Receipt(Document):
 
     # Cost Items
     cost_items = ListField(EmbeddedDocumentField(CostItem), default=list)
+
+    template_used = ReferenceField(ReceiptTemplate, reverse_delete_rule=NULLIFY)
     
     # Ownership and workflow
 

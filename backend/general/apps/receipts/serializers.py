@@ -2,6 +2,7 @@ from rest_framework import serializers
 from common.serializers import DocumentSerializer
 from .models import Receipt, CostItem
 from bson import ObjectId
+import base64
 
 # Custom ReceiptDocumentSerializer for MongoEngine Documents 
 class ReceiptDocumentSerializer(DocumentSerializer):
@@ -48,6 +49,7 @@ class CostItemSerializer(ReceiptDocumentSerializer):
 
 class ReceiptSerializer(ReceiptDocumentSerializer):
     id = serializers.CharField(read_only=True)
+    template_used = serializers.SerializerMethodField(read_only=True)
     merchant_name = serializers.CharField(read_only=True)
     transaction_time = serializers.DateTimeField(read_only=True)
     merchant_address = serializers.CharField(required=False, allow_null=True, allow_blank=True)
@@ -65,9 +67,8 @@ class ReceiptSerializer(ReceiptDocumentSerializer):
     approver = serializers.CharField(read_only=True)
 
     upload_date = serializers.DateTimeField(read_only=True)
-    original_filename = serializers.CharField(required=False)
-    file_id = serializers.CharField(required=False)    # GridFS ID reference
-    file_type = serializers.CharField(required=False)
+    file = serializers.FileField(required=False)
+    file_ext = serializers.CharField(required=False)
 
     latitude = serializers.FloatField(required=False, allow_null=True)
     longitude = serializers.FloatField(required=False, allow_null=True)
@@ -90,6 +91,11 @@ class ReceiptSerializer(ReceiptDocumentSerializer):
         if obj.approver:
             return str(obj.approver.id)  # Convert ObjectId to string
         return None
+    
+    def get_template_used(self, obj):
+        if obj.template_used:
+            return str(obj.template_used.id)
+        return None
 
     def validate(self, data):
         """Validate that receipts have required file-related fields."""
@@ -97,7 +103,7 @@ class ReceiptSerializer(ReceiptDocumentSerializer):
         data = super().validate(data)
 
         if self.instance:  # This means we're updating an existing instance
-            immutable_fields = ['file_id', 'original_filename', 'file_type', 'creation_date']
+            immutable_fields = ['file', 'file_ext', 'upload_date']
 
             for field in immutable_fields:
                 if field in data and getattr(self.instance, field) != data[field]:
@@ -106,7 +112,7 @@ class ReceiptSerializer(ReceiptDocumentSerializer):
                     })
         else: # For new receipt creation (not updates)
             # Check for required file fields
-            required_fields = ['file_id', 'original_filename', 'file_type']
+            required_fields = ['file', 'file_ext', 'upload_date']
             missing_fields = [field for field in required_fields if not data.get(field)]
 
             print(data)
@@ -137,13 +143,8 @@ class ReceiptSerializer(ReceiptDocumentSerializer):
         return ret
 
     def custom_representation(self, instance, data):
-        """Add cost items to the representation"""
+        """Handle file and other special person fields"""
         # Find all cost items for this receipt
-        from .models import CostItem
-        cost_items = CostItem.objects(receipt=instance)
-        
-        # Serialize each cost item
-        serializer = CostItemSerializer(cost_items, many=True)
-        data['cost_items'] = serializer.data
-        
+        data['file'] = base64.b64encode(instance.file.read()).decode('utf-8')
+        data['file_ext'] = instance.file_ext
         return data

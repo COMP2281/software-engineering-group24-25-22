@@ -358,6 +358,8 @@ class TemplateSuite:
         template.record_usage()
 
         # Create OCR template and extract fields
+        print("FUCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCKK")
+        print(ocr_text)
         ocr_template = OCRTemplate(ocr_text)
 
         # Build template data structure
@@ -732,13 +734,13 @@ class TemplateSuite:
         # Convert corrected data to expected format
         corrected_values = OCRTemplateCorrection(
             merchant_name=corrected_data.get('merchant_name', ''),
-            date=corrected_data.get('transaction_time', ''),
-            address=corrected_data.get('merchant_address', ''),
-            reference=corrected_data.get('reference_number', ''),
+            transaction_time=corrected_data.get('transaction_time', ''),
+            merchant_address=corrected_data.get('merchant_address', ''),
+            reference_number=corrected_data.get('reference_number', ''),
             total_amount=corrected_data.get('total_amount', ''),
             subtotal_amount=corrected_data.get('subtotal_amount', ''),
             cost_items=corrected_data.get('cost_items', []),
-            tax=corrected_data.get('tax_amount', ''),
+            tax_amount=corrected_data.get('tax_amount', ''),
             description=corrected_data.get('description', ''),
             category=corrected_data.get('category', '')
         )
