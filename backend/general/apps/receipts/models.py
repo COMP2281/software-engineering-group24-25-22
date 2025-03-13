@@ -1,10 +1,17 @@
-from mongoengine import Document, StringField, DateTimeField, FloatField, BooleanField
-from mongoengine import DecimalField, ReferenceField, CASCADE, NULLIFY
-import mongoengine
-from django.conf import settings
+from mongoengine import Document, StringField, DateTimeField, FloatField, BooleanField, FileField, DecimalField, ReferenceField, CASCADE, NULLIFY, EmbeddedDocument, EmbeddedDocumentField, ListField
 from django.utils import timezone
 from decimal import Decimal
 
+class CostItem(EmbeddedDocument):
+    """Individual line items embedded in a receipt"""
+
+    item_name = StringField(max_length=255)
+    unit_price = DecimalField(precision=2)
+    quantity = DecimalField(precision=2, default=Decimal('1.00'))
+    total_price = DecimalField(precision=2)
+
+    def __str__(self):
+        return f"{self.item_name} - {self.quantity} x {self.unit_price} = {self.total_price}"
 
 class Receipt(Document):
     """Receipt model for storing extracted data from uploaded receipts"""
@@ -28,6 +35,9 @@ class Receipt(Document):
     total_amount = DecimalField(precision=2)
     subtotal_amount = DecimalField(precision=2, required=False)
     currency = StringField(max_length=3, default='GBP')
+
+    # Cost Items
+    cost_items = ListField(EmbeddedDocumentField(CostItem), default=list)
     
     # Ownership and workflow
 
@@ -50,13 +60,11 @@ class Receipt(Document):
     
     # File metadata
     upload_date = DateTimeField(default=timezone.now)
-    original_filename = StringField(max_length=255, required=True)
-    file_type = StringField(max_length=10, required=True)  # PDF, JPG, etc.
-    file_id = StringField(max_length=50, required=True)    # GridFS ID reference
+    file = FileField(required=True, cascade_delete=True)
+    file_ext = StringField(max_length=10, required=True)  # PDF, JPG, etc.
     
     # OCR processing details
-    ocr_confidence = FloatField(default=0.0)  # 0-100
-    needs_review = BooleanField(default=False)
+    template_correspondence = FloatField(default=0.0)  # 0-100
     
     # Location data (optional)
     latitude = FloatField(required=False)
@@ -66,6 +74,20 @@ class Receipt(Document):
     # Timestamps
     created_at = DateTimeField(default=timezone.now)
     updated_at = DateTimeField()
+    
+    def add_cost_item(self, item_name, unit_price, quantity=Decimal('1.00'), total_price=None):
+        """Helper method to add a cost item to the receipt"""
+        if total_price is None:
+            total_price = unit_price * quantity
+            
+        item = CostItem(
+            item_name=item_name,
+            unit_price=unit_price,
+            quantity=quantity,
+            total_price=total_price
+        )
+        self.cost_items.append(item)
+        return item
     
     def __str__(self):
         return f"{self.merchant_name} - {self.transaction_time.date()} - {self.total_amount} {self.currency}"
@@ -77,34 +99,5 @@ class Receipt(Document):
             'employee',
             'status',
             'transaction_time',
-        ]
-    }
-
-
-class CostItem(Document):
-    """Individual line items on a receipt"""
-    
-    receipt = ReferenceField(
-        Receipt, 
-        reverse_delete_rule=CASCADE
-    )
-    item_name = StringField(max_length=255)
-    unit_price = DecimalField(precision=2)
-    quantity = DecimalField(precision=2, default=Decimal('1.00'))
-    total_price = DecimalField(precision=2)
-    
-    def save(self, *args, **kwargs):
-        # Auto-calculate total_price if not provided
-        if not self.total_price:
-            self.total_price = self.unit_price * self.quantity
-        super().save(*args, **kwargs)
-    
-    def __str__(self):
-        return f"{self.item_name} - {self.quantity} x {self.unit_price} = {self.total_price}"
-        
-    meta = {
-        'collection': 'cost_items',
-        'indexes': [
-            'receipt'
         ]
     }

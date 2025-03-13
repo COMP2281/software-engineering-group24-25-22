@@ -7,14 +7,16 @@ from django.utils import timezone
 from django.conf import settings
 from django.db.models import Q
 from celery import shared_task
+from apps.jobs.utils import temp_file_path
 
 logger = logging.getLogger(__name__)
 
 @shared_task
 def cleanup_temporary_files():
     """
-    Task to clean up old temporary files from the TEMP_UPLOAD_DIR
-    Runs daily and removes files older than 7 days that aren't related to active jobs
+    Task to clean up temporary files from the TEMP_UPLOAD_DIR:
+    1. For jobs with expiration timestamp: delete if expired (4 hours)
+    2. For jobs without expiration timestamp: delete if older than 7 days (legacy fallback)
     """
     from .models import ProcessingJob
     
@@ -29,39 +31,94 @@ def cleanup_temporary_files():
         logger.warning(f"Temporary directory {temp_dir} does not exist")
         return
     
-    # Get list of active job IDs 
-    active_jobs = [str(job.job_id) for job in ProcessingJob.objects(
-        status__in=['pending', 'processing']
-    )]
+    # Get all jobs with temporary files that haven't been confirmed or discarded
+    all_jobs = ProcessingJob.objects(
+        status__nin=['confirmed', 'discarded'],
+        uploaded_file__ne=None
+    )
     
-    # Get all job directories
-    job_dirs = [d for d in temp_dir.iterdir() if d.is_dir()]
+    # Track results
+    expired_count = 0
+    active_count = 0
+    error_count = 0
+    orphaned_count = 0
     
-    # Set cutoff date (7 days ago)
-    cutoff_date = datetime.now() - timedelta(days=7)
+    # Get current time for comparisons
+    now = timezone.now()
     
-    removed_count = 0
-    
-    # Check each directory
-    for job_dir in job_dirs:
-        job_id = job_dir.name
-        
-        # Skip if this is an active job
-        if job_id in active_jobs:
-            logger.debug(f"Skipping cleanup of active job: {job_id}")
-            continue
-        
-        # Check directory modification time
+    # First check jobs with expiration timestamps
+    for job in all_jobs:
         try:
-            mod_time = datetime.fromtimestamp(job_dir.stat().st_mtime)
+            # Skip jobs that don't have a file anymore
+            if not hasattr(job.uploaded_file, 'path') or not job.uploaded_file.path:
+                continue
+                
+            # Get file path
+            file_path = Path(job.uploaded_file.path)
             
-            # Remove if older than cutoff date
-            if mod_time < cutoff_date:
-                logger.info(f"Removing old job directory: {job_id}")
-                shutil.rmtree(job_dir)
-                removed_count += 1
+            # Check if the file exists
+            if not file_path.exists():
+                continue
+                
+            # Check if job has expiration timestamp
+            if job.metadata and 'temp_expiration' in job.metadata:
+                try:
+                    # Parse expiration timestamp
+                    expiration_time = datetime.fromisoformat(job.metadata['temp_expiration'])
+                    
+                    # Check if expired
+                    if now > expiration_time:
+                        # Remove the file
+                        try:
+                            os.remove(file_path)
+                            
+                            # Mark job as abandoned
+                            if job.status not in ['confirmed', 'discarded', 'failed']:
+                                if not job.metadata:
+                                    job.metadata = {}
+                                job.metadata['abandoned_at'] = now.isoformat()
+                                job.update_status('abandoned', error_message="Temporary file expired")
+                                
+                            expired_count += 1
+                            logger.info(f"Removed expired file for job {job.id}")
+                        except Exception as e:
+                            logger.error(f"Error removing file for job {job.id}: {e}")
+                            error_count += 1
+                    else:
+                        # File not expired yet
+                        active_count += 1
+                        
+                except (ValueError, TypeError):
+                    # Invalid timestamp format, fall back to modification time check
+                    logger.warning(f"Invalid expiration timestamp for job {job.id}")
+                    check_file_modification_time(file_path, job)
+            else:
+                # No expiration timestamp, fall back to modification time check
+                check_file_modification_time(file_path, job)
+                
         except Exception as e:
-            logger.error(f"Error cleaning up job directory {job_id}: {e}")
+            logger.error(f"Error processing job {job.id}: {e}")
+            error_count += 1
+    
+    # Now check for orphaned files/directories (files without associated jobs)
+    # Get job directories
+    jobs_dir = temp_dir / 'jobs'
+    if jobs_dir.exists():
+        job_dirs = [d for d in jobs_dir.iterdir() if d.is_dir()]
+        valid_job_ids = [str(job.id) for job in all_jobs]
+        
+        for job_dir in job_dirs:
+            job_id = job_dir.name
+            
+            # If no active job with this ID, remove the directory
+            if job_id not in valid_job_ids:
+                try:
+                    shutil.rmtree(job_dir)
+                    orphaned_count += 1
+                    logger.info(f"Removed orphaned directory for job {job_id}")
+                except Exception as e:
+                    logger.error(f"Error removing orphaned directory {job_id}: {e}")
+                    error_count += 1
     
     # Calculate duration
     duration = timezone.now() - start_time
@@ -69,15 +126,45 @@ def cleanup_temporary_files():
     # Log results
     logger.info(
         f"Temporary file cleanup completed in {duration.total_seconds():.2f} seconds. "
-        f"Removed {removed_count} directories."
+        f"Expired: {expired_count}, Active: {active_count}, Orphaned: {orphaned_count}, Errors: {error_count}"
     )
     
     return {
         'status': 'completed',
-        'removed_count': removed_count,
+        'expired_count': expired_count,
+        'active_count': active_count,
+        'orphaned_count': orphaned_count,
+        'error_count': error_count,
         'duration_seconds': duration.total_seconds(),
         'timestamp': timezone.now().isoformat()
     }
+
+def check_file_modification_time(file_path, job):
+    """Helper function to check file modification time and cleanup if needed"""
+    # Set cutoff date (7 days ago) - legacy fallback
+    cutoff_date = datetime.now() - timedelta(days=7)
+    
+    # Check file modification time
+    try:
+        mod_time = datetime.fromtimestamp(file_path.stat().st_mtime)
+        
+        # Remove if older than cutoff date
+        if mod_time < cutoff_date:
+            os.remove(file_path)
+            
+            # Mark job as abandoned
+            if job.status not in ['confirmed', 'discarded', 'failed']:
+                if not job.metadata:
+                    job.metadata = {}
+                job.metadata['abandoned_at'] = timezone.now().isoformat()
+                job.update_status('abandoned', error_message="Temporary file expired (7-day fallback)")
+            
+            logger.info(f"Removed old file for job {job.id} based on modification time")
+            return True
+    except Exception as e:
+        logger.error(f"Error checking modification time for job {job.id}: {e}")
+    
+    return False
 
 @shared_task
 def transfer_to_gridfs(job_id):
@@ -90,25 +177,80 @@ def transfer_to_gridfs(job_id):
     Returns:
         dict: Transfer results
     """
-    # This would implement the transfer logic to move files from 
-    # temporary storage to GridFS when a job is confirmed
-    # In a real implementation, this would:
-    # 1. Connect to MongoDB
-    # 2. Create a GridFS bucket
-    # 3. Read the file from temp storage
-    # 4. Store it in GridFS with metadata
-    # 5. Update job with the GridFS file ID
-    # 6. Delete the temp file
+    from .models import ProcessingJob
     
-    # For now, just log that we would do this
-    logger.info(f"Would transfer job {job_id} to GridFS")
-    
-    return {
-        'status': 'completed',
-        'job_id': str(job_id),
-        'gridfs_id': f"simulated_gridfs_id_{job_id}",
-        'timestamp': timezone.now().isoformat()
-    }
+    try:
+        # Get the job
+        job = ProcessingJob.objects.get(id=job_id)
+        
+        # Get file path
+        file_path = temp_file_path(job)
+        
+        # Check if file exists
+        if not os.path.exists(file_path):
+            error_msg = f"File not found for job {job_id}"
+            logger.error(error_msg)
+            job.update_status('failed', error_message=error_msg)
+            return {'status': 'failed', 'error': error_msg}
+        
+        # Prepare metadata
+        metadata = {
+            'job_id': str(job.id),
+            'user_id': str(job.user_id),
+            'original_filename': job.original_filename,
+            'file_type': job.file_type,
+            'upload_date': job.created_at,
+            'confirmed_date': timezone.now()
+        }
+        
+        # Properly use the MongoEngine FileField
+        with open(file_path, 'rb') as f:
+            # This directly uses MongoEngine's FileField to store in GridFS
+            job.uploaded_file.put(
+                f, 
+                filename=job.original_filename,
+                content_type=job.file_type,
+                metadata=metadata
+            )
+        
+        # Save the job to persist the uploaded file
+        job.save()
+        
+        # Delete the temp file after successful upload
+        os.remove(file_path)
+        
+        # Get the GridFS ID for the response
+        gridfs_id = job.uploaded_file.grid_id
+
+        print(gridfs_id)
+        
+        # Log success
+        logger.info(f"Successfully transferred job {job_id} to GridFS (id: {gridfs_id})")
+        
+        return {
+            'status': 'completed',
+            'job_id': str(job_id),
+            'gridfs_id': str(gridfs_id),
+            'timestamp': timezone.now().isoformat()
+        }
+        
+    except ProcessingJob.DoesNotExist:
+        error_msg = f"Job not found: {job_id}"
+        logger.error(error_msg)
+        return {'status': 'failed', 'error': error_msg}
+        
+    except Exception as e:
+        error_msg = f"Error transferring to GridFS: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        
+        # Try to update job status if we have a reference to it
+        try:
+            if 'job' in locals():
+                job.update_status('failed', error_message=error_msg)
+        except Exception:
+            pass
+            
+        return {'status': 'failed', 'error': error_msg}
     
 @shared_task
 def cleanup_old_jobs():

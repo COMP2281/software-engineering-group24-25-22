@@ -1,9 +1,9 @@
 from typing import TypedDict, List, Dict, Any, Optional, Tuple, Union
 import re
-from datetime import datetime, timedelta
 import logging
-import iso4217parse
 from collections import Counter
+import regex 
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,7 @@ class FieldExtractor(TypedDict):
     offset_from_last_item: Optional[int]
     regex: str  # Regex pattern for extraction
     expected_present: bool  # Whether this field is expected in this template
+    is_fuzzy_haystack: bool  # Whether this field uses reverse fuzzy matching
 
 
 class LineItemMatcher(TypedDict):
@@ -62,6 +63,14 @@ class OCRTemplate:
 
     # Pre-defined regex patterns for different field types
     FIELD_PATTERNS = {
+        'merchant_name': [
+            # Common merchant name patterns - typically at the top of receipt
+            r"^\s*([A-Z][A-Z\s&.']{2,})\s*$",  # ALL CAPS NAME
+            r"^\s*([A-Z][a-zA-Z\s&.']{2,})\s*$",  # Capitalized Name
+            r"^\s*(?:Store|Merchant|Shop|Restaurant|Retail|Vendor):\s*([A-Za-z0-9\s&.'-]+)",  # Labeled merchant
+            r"^(?:\*{2,}|\s{2,}|\t+)([A-Za-z0-9\s&.'-]+)(?:\*{2,}|\s{2,}|\t+)$",  # Centered/decorated name
+        ],
+        
         'transaction_time': [
             # Common date formats
             r"Date:\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
@@ -73,17 +82,35 @@ class OCRTemplate:
             r"(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)",
             # Combined date and time
             r"(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)",
+            # ISO-like formats
+            r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})",
+            r"(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)",
+            # More European formats (day first)
+            r"(\d{1,2}\.\d{1,2}\.\d{2,4})",
+            # Receipt transaction IDs with timestamps
+            r"Transaction\s+(?:Date|Time):\s*([A-Za-z0-9\s/:.-]+)",
         ],
+        
         'merchant_address': [
             # Address patterns
             r"(?:Address|Location):\s*(.*(?:Street|St|Road|Rd|Avenue|Ave|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Plaza|Plz|Square|Sq|Highway|Hwy|Route|Rt).*)",
             r"(.*(?:Street|St|Road|Rd|Avenue|Ave|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Plaza|Plz|Square|Sq|Highway|Hwy|Route|Rt).*)",
             # Postal/ZIP code patterns
-            # US and UK formats
-            r"(.*(?:\d{5}|\d{5}-\d{4}|\d{4}\s*[A-Z]{2}).*)",
+            r"(.*(?:\d{5}|\d{5}-\d{4}|\d{4}\s*[A-Z]{2}).*)",  # US and UK postal codes
             # Multi-line address with city, state, zip
             r"((?:.*,?\s*){1,3}(?:\d{5}|\d{5}-\d{4}|\d{4}\s*[A-Z]{2}))",
+            # Store locations that don't have street names
+            r"([A-Za-z0-9\s]+(?:Store|Branch|Location|Express|Superstore|Market|Shop))",
+            r"([A-Za-z0-9\s]+(?:Mall|Centre|Center|Retail Park))",
+            # Generic city/town locations
+            r"([A-Za-z\s]+,\s*[A-Za-z\s]+)",  # City, State format
+            r"Tel(?:ephone)?:.*?([A-Za-z0-9\s,]+)(?=\n|$)",  # Address near phone number
+            # Common store location formats
+            r"(?:store|branch)(?:\s*#|\s*no|\s*number)?:?\s*([A-Za-z0-9\s]+)",
+            # Branded location formats 
+            r"([A-Za-z]+\s+(?:Express|Extra|Metro|Local|Superstore|Supermarket))",
         ],
+        
         'reference_number': [
             # Order/receipt number formats
             r"(?:Order|Receipt|Transaction|Ref|Reference|Invoice)(?:\s*#|\s*No|\s*Number)?:\s*([A-Za-z0-9-]+)",
@@ -91,25 +118,60 @@ class OCRTemplate:
             r"#\s*([A-Za-z0-9-]{5,})",
             # General alphanumeric with separators
             r"([A-Za-z0-9][\w\-]{4,})",
+            # VAT/Tax registration numbers
+            r"VAT\s*(?:Number|Reg|Registration|No)(?:\s*:|\s+)?\s*([A-Za-z0-9\s-]+)",
+            r"Tax\s*(?:ID|Number|Identifier)(?:\s*:|\s+)?\s*([A-Za-z0-9\s-]+)",
+            # Receipt-specific identifiers
+            r"(?:Check|Bill)\s*(?:#|No|Number)?(?:\s*:|\s+)?\s*([A-Za-z0-9-]+)",
+            r"(?:Terminal|Register|Till)(?:\s*:|\s+)?\s*([A-Za-z0-9-]+)",
+            # Card transaction references
+            r"Auth(?:orization|orisation)?\s*(?:Code|No|#)?(?:\s*:|\s+)?\s*([A-Za-z0-9-]+)",
+            r"(?:Payment|Transaction)\s*ID(?:\s*:|\s+)?\s*([A-Za-z0-9-]+)",
         ],
+        
         'tax_amount': [
             # Tax amount patterns
             r"(?:Tax|VAT|GST|HST)(?:\s*\(\d+%\))?:\s*(\d+\.\d{2})",
             r"(?:Tax|VAT|GST|HST)(?:\s*\(\d+%\))?(?:\s*:)?\s*(\d+\.\d{2})",
             # Tax amount and percentage
             r"(?:Tax|VAT|GST|HST)\s*\((\d+\.\d{1,2})%\):\s*(\d+\.\d{2})",
+            # Additional tax formats
+            r"(?:Sales\s+Tax|Tax\s+Total):\s*(\d+\.\d{2})",
+            r"(?:Tax|VAT|GST|HST)(?:\s+\d+%)?(?:\s*:)?\s*([£$€]?\d+\.\d{2})",
+            # Multiple tax formats (take the last one)
+            r"(?:.*Tax.*\n)*.*Tax.*?(\d+\.\d{2})",
+            # Tax included format
+            r"(?:VAT|Tax)?\s+Included:\s*(\d+\.\d{2})",
         ],
+        
         'total_amount': [
             # Total amount patterns
             r"(?:Total|Amount Due|Grand Total|Balance Due|Pay This Amount):\s*(\d+\.\d{2})",
             r"(?:Total|Amount Due|Grand Total|Balance Due|Pay This Amount)(?:\s*:)?\s*(\d+\.\d{2})",
             # Just a number that looks like currency at the end of a receipt
             r"(\d+\.\d{2})\s*$",
+            # TOTAL in caps
+            r"TOTAL\s*(?::)?\s*[£$€]?(\d+\.\d{2})",
+            # Cash/card payment lines
+            r"(?:Cash|Card|Credit|Debit)\s+(?:Paid|Payment|Tender|Amount):\s*(\d+\.\d{2})",
+            # Labeled total
+            r"(?:To Pay|Please Pay|Amount Paid|Paid|Payment)(?:\s*:)?\s*[£$€]?(\d+\.\d{2})",
+            # Final amount with currency symbol
+            r"(?:Total|Amount Due|Grand Total|Balance Due|Pay This Amount)(?:\s*:)?\s*[£$€](\d+\.\d{2})",
         ],
+        
         'subtotal_amount': [
             # Subtotal amount patterns
             r"(?:Subtotal|Sub-total|Net):\s*(\d+\.\d{2})",
             r"(?:Subtotal|Sub-total|Net)(?:\s*:)?\s*(\d+\.\d{2})",
+            # Additional formats
+            r"(?:Subtotal|Sub-total|Net|Goods)\s+(?:Amount|Value)(?:\s*:)?\s*(\d+\.\d{2})",
+            # Before tax subtotal
+            r"(?:Amount|Total)\s+(?:Before|Ex)\s+(?:Tax|VAT)(?:\s*:)?\s*(\d+\.\d{2})",
+            # Items total
+            r"(?:Items|Basket)\s+(?:Total|Amount)(?:\s*:)?\s*(\d+\.\d{2})",
+            # With currency symbol
+            r"(?:Subtotal|Sub-total|Net)(?:\s*:)?\s*[£$€](\d+\.\d{2})",
         ],
     }
 
@@ -118,18 +180,21 @@ class OCRTemplate:
         Initialize with OCR text and optional corrected values.
         If corrected values are provided, constructs a new template.
         """
+
         self.lines = ocr_text.strip().split('\n')
         self.corrected_values = corrected_values
 
-        # Detect currency from OCR text
-        self._detect_currency()
-
         self.merchant_name = self._find_merchant_name()
+
+        print("merchant_name", self.merchant_name)
+
+        # removed detect_currency() call
 
         if corrected_values:
             # Create a new template from corrections
             self.template_data = self._create_template_from_corrections()
 
+    # currency_code is still unset
     def _detect_currency(self):
         """
         Detect currency symbol and code from OCR text by analyzing each line.
@@ -139,42 +204,15 @@ class OCRTemplate:
         # Count currency occurrences across all lines
         currency_counts = Counter()
 
-        # Use iso4217parse library for currency detection
-        for line in self.lines:
-            try:
-                currencies = iso4217parse.by_symbol_match(line)
-                if currencies:
-                    for currency in currencies:
-                        currency_counts[currency.alpha3] += 1
-                        # Store the first symbol for this currency
-                        if not self.currency_symbol and currency.symbols:
-                            self.currency_symbol = currency.symbols[0]
-            except Exception as e:
-                logger.warning(f"Error detecting currency: {e}")
+        found_symbols = regex.findall(r'\p{Sc}', "".join(self.lines))
+
+        for symbol in found_symbols:
+            currency_counts[symbol] += 1
 
         # Use the most common currency, fallback to default (GBP)
         if currency_counts:
-            self.currency_code = currency_counts.most_common(1)[0][0]
-
-            # Find the corresponding symbol if not set
-            if not self.currency_symbol:
-                for line in self.lines:
-                    try:
-                        currencies = iso4217parse.by_symbol_match(line)
-                        if currencies:
-                            for currency in currencies:
-                                if currency.alpha3 == self.currency_code and currency.symbols:
-                                    self.currency_symbol = currency.symbols[0]
-                                    break
-                            if self.currency_symbol:
-                                break
-                    except Exception:
-                        pass
-
-        # If still no symbol found, use common mappings
-        if not self.currency_symbol and self.currency_code:
-            self.currency_symbol = {'GBP': '£', 'USD': '$', 'EUR': '€', 'JPY': '¥'}.get(
-                self.currency_code, '')
+            self.currency_symbol = currency_counts.most_common(1)[0][0]
+            self.currency_code = "N/A"
 
         logger.info(
             f"Detected currency: {self.currency_code} (symbol: {self.currency_symbol})")
@@ -184,6 +222,7 @@ class OCRTemplate:
         Find merchant name in the OCR text, either from corrected values
         or by looking at the first few lines of the receipt.
         """
+
         if self.corrected_values and self.corrected_values.get('merchant_name'):
             return self.corrected_values['merchant_name']
 
@@ -198,401 +237,398 @@ class OCRTemplate:
             return potential_names[0]  # Return the first potential name
         return "Unknown Merchant"
 
-    def _find_line_items(self) -> Tuple[Optional[int], Optional[int], List[Dict[str, Any]]]:
+    def _find_line_items(self) -> Tuple[int, int, List[Dict[str, Any]]]:
         """
         Locate line items in the receipt and extract their information.
         Returns: (start_line, end_line, extracted_items)
         """
         if not self.corrected_values or 'cost_list' not in self.corrected_values:
-            return None, None, []
+            return -1, -1, []
 
         cost_list = self.corrected_values['cost_list']
         if not cost_list:
-            return None, None, []
+            return -1, -1, []
 
         # Search for line items based on the corrected data
-        start_line = None
-        end_line = None
+        start_line = -1
+        end_line = -1
         items_found = []
+        
+        # First, find the earliest occurrence of ANY item in the OCR text
+        # This ensures we don't miss the start of the items section if the first
+        # corrected item isn't actually the first one in the receipt
+        earliest_start = None
+        earliest_item: OCRTemplateCostList
+        
+        for item in cost_list:
+            item_name = item['item']
+            for i, line in enumerate(self.lines):
+                if item_name in line:
+                    if earliest_start is None or i < earliest_start:
+                        earliest_start = i
+                        earliest_item = item
+                    break
+        
+        # Use the earliest found item as our starting point
+        if earliest_start is not None:
+            start_line = earliest_start
+            logger.info(f"Found earliest item '{earliest_item['item']}' at line {start_line}")
+        else:
+            logger.warning("Could not find any corrected items in OCR text")
+            return -1, -1, []
 
-        # Look for the first item in the OCR text
-        first_item = cost_list[0]['item']
-        for i, line in enumerate(self.lines):
-            if first_item in line:
-                start_line = i
-                break
-
-        # If found start line, extract all items and find end line
-        if start_line is not None:
-            for item in cost_list:
+        # Now that we have the correct starting point, find all items
+        # This will include items that might appear before others in the user's correction list
+        for item in cost_list:
+            item_found = False
+            # Start searching from the earliest start line we found
+            for i in range(start_line, len(self.lines)):
+                # Check for exact match or if the item name is contained within the line
+                # This helps with multiline items or items with slight OCR differences
+                if item['item'] in self.lines[i]:
+                    items_found.append({
+                        'line': i,
+                        'content': self.lines[i],
+                        'item': item
+                    })
+                    if end_line is None or i > end_line:
+                        end_line = i
+                    item_found = True
+                    break
+                    
+            if not item_found:
+                # If we couldn't find an exact match, try a more lenient search
+                # This helps with OCR errors or slight formatting differences
                 for i in range(start_line, len(self.lines)):
-                    if item['item'] in self.lines[i]:
+                    # Check if at least 60% of the item name words appear in the line
+                    item_words = set(item['item'].lower().split())
+                    line_words = set(self.lines[i].lower().split())
+                    common_words = item_words.intersection(line_words)
+                    
+                    if len(common_words) >= max(1, len(item_words) * 0.6):
                         items_found.append({
                             'line': i,
                             'content': self.lines[i],
                             'item': item
                         })
-                        end_line = i
+                        if end_line is None or i > end_line:
+                            end_line = i
                         break
 
+        # Sort found items by line number to preserve receipt order
+        items_found.sort(key=lambda x: x['line'])
+        
+        if not items_found:
+            logger.warning("Could not locate any corrected items in OCR text")
+            return -1, -1, []
+            
+        logger.info(f"Found {len(items_found)}/{len(cost_list)} corrected items, from line {start_line} to {end_line}")
+        print("items_found", items_found)
         return start_line, end_line, items_found
 
     def _create_line_item_regex(self, item_lines: List[Dict[str, Any]]) -> Optional[LineItemMatcher]:
         """
         Create regex patterns for line items based on the structure observed.
+        Uses a library of common patterns and selects the one that matches the most lines.
         """
         if not item_lines:
             return None
 
-        # Find common patterns in line items
-        patterns = []
-        for item in item_lines:
-            line = item['content']
-            # Try to identify quantity, item name, and price
-            # This is a simplified approach - real implementation would be more robust
-            quantity = item['item'].get('quantity', '1')
-            item_name = item['item']['item']
-            price = item['item']['total']
+        # Library of common line item regex patterns with capture groups
+        COMMON_PATTERNS = [
+            # Pattern 1: Quantity Item Price
+            # Example: "2 MILK 1.80"
+            {
+                "pattern": r"(\d+(?:\.\d+)?)\s+([A-Za-z0-9\s&'.,\-]+?)\s+(?:[£$€])?(\d+\.\d{2})",
+                "groups": {"quantity": 1, "item_name": 2, "total_price": 3}
+            },
+            
+            # Pattern 2: Quantity x Item Price
+            # Example: "2 x MILK 1.80" or "2x MILK 1.80"
+            {
+                "pattern": r"(\d+(?:\.\d+)?)\s*[xX]\s+([A-Za-z0-9\s&'.,\-]+?)\s+(?:[£$€])?(\d+\.\d{2})",
+                "groups": {"quantity": 1, "item_name": 2, "total_price": 3}
+            },
+            
+            # Pattern 3: Item Quantity Price
+            # Example: "MILK 2 1.80"
+            {
+                "pattern": r"([A-Za-z0-9\s&'.,\-]+?)\s+(\d+(?:\.\d+)?)\s+(?:[£$€])?(\d+\.\d{2})",
+                "groups": {"item_name": 1, "quantity": 2, "total_price": 3}
+            },
+            
+            # Pattern 4: Item Price (quantity implied as 1)
+            # Example: "MILK 1.80"
+            {
+                "pattern": r"([A-Za-z0-9\s&'.,\-]+?)\s+(?:[£$€])?(\d+\.\d{2})",
+                "groups": {"item_name": 1, "total_price": 2, "quantity": 1}  # quantity will be set to 1
+            },
+            
+            # Pattern 5: Item Quantity Unit_Price Total_Price
+            # Example: "MILK 2 0.90 1.80"
+            {
+                "pattern": r"([A-Za-z0-9\s&'.,\-]+?)\s+(\d+(?:\.\d+)?)\s+(?:[£$€])?(\d+\.\d{2})\s+(?:[£$€])?(\d+\.\d{2})",
+                "groups": {"item_name": 1, "quantity": 2, "unit_price": 3, "total_price": 4}
+            },
+            
+            # Pattern 6: Quantity Item Unit_Price Total_Price
+            # Example: "2 MILK 0.90 1.80"
+            {
+                "pattern": r"(\d+(?:\.\d+)?)\s+([A-Za-z0-9\s&'.,\-]+?)\s+(?:[£$€])?(\d+\.\d{2})\s+(?:[£$€])?(\d+\.\d{2})",
+                "groups": {"quantity": 1, "item_name": 2, "unit_price": 3, "total_price": 4}
+            },
+            
+            # Pattern 7: "Pkg" after quantity (common in some stores)
+            # Example: "2 Pkg MILK 1.80"
+            {
+                "pattern": r"(\d+(?:\.\d+)?)\s+(?:Pkg|PKG|pkg)\s+([A-Za-z0-9\s&'.,\-]+?)\s+(?:[£$€])?(\d+\.\d{2})",
+                "groups": {"quantity": 1, "item_name": 2, "total_price": 3}
+            },
+            
+            # Pattern 8: Item with weight (kg/lb)
+            # Example: "BANANAS 0.5 kg 1.50"
+            {
+                "pattern": r"([A-Za-z0-9\s&'.,\-]+?)\s+(\d+(?:\.\d+)?)\s*(?:kg|g|lb|oz)\s+(?:[£$€])?(\d+\.\d{2})",
+                "groups": {"item_name": 1, "quantity": 2, "total_price": 3}
+            }
+        ]
 
-            # Escape regex special characters
+        # Test each pattern against all item lines
+        pattern_scores = []
+        
+        for pattern_def in COMMON_PATTERNS:
+            pattern = pattern_def["pattern"]
+            groups = pattern_def["groups"]
+            score = 0
+            matches = []
+            
+            # Test this pattern against each line
+            for item in item_lines:
+                line = item['content']
+                match = re.search(pattern, line)
+                
+                if match:
+                    # Verify the match returns expected values
+                    expected_values = {}
+                    for field, group_idx in groups.items():
+                        if group_idx is not None and group_idx <= len(match.groups()):
+                            expected_values[field] = match.group(group_idx)
+                        elif field == "quantity":
+                            expected_values[field] = "1"  # Default quantity
+                    
+                    # Check if extracted data matches corrected values
+                    correct_match = True
+                    if "quantity" in expected_values and "quantity" in item['item']:
+                        if expected_values["quantity"] != item['item']["quantity"]:
+                            correct_match = False
+                    
+                    if "item_name" in expected_values:
+                        # Use fuzzy matching for item name because exact match might be too strict
+                        if item['item']["item"] not in expected_values["item_name"] and expected_values["item_name"] not in item['item']["item"]:
+                            correct_match = False
+                    
+                    if "total_price" in expected_values:
+                        if expected_values["total_price"] != item['item']["total"]:
+                            correct_match = False
+                    
+                    if correct_match:
+                        score += 1
+                        matches.append(line)
+            
+            # Store score and matches for this pattern
+            pattern_scores.append({
+                "pattern": pattern,
+                "groups": groups,
+                "score": score,
+                "matches": matches,
+                "coverage": score / len(item_lines) if item_lines else 0
+            })
+        
+        # Sort patterns by score (highest first)
+        pattern_scores.sort(key=lambda x: x["score"], reverse=True)
+        
+        # If we have a pattern with good coverage, use it
+        if pattern_scores and pattern_scores[0]["coverage"] >= 0.5:  # At least 50% match
+            best_pattern = pattern_scores[0]
+            logger.info(f"Selected line item pattern with {best_pattern['score']}/{len(item_lines)} matches")
+            
+            return {
+                'start_line': item_lines[0]['line'],
+                'regex': best_pattern['pattern'],
+                'groups': best_pattern['groups']
+            }
+        
+        # If no pattern matches well, fall back to creating a custom pattern
+        # This is a last resort when standard patterns don't work
+        logger.warning(f"No common pattern matched well, creating custom pattern")
+        
+        # Create a pattern that matches the first item as a fallback
+        item = item_lines[0]
+        line = item['content']
+        quantity = item['item'].get('quantity', '1')
+        item_name = item['item']['item']
+        price = item['item']['total']
+        
+        # Try to create a more generic pattern based on the structure
+        # Look for numbers and text blocks
+        numbers = re.findall(r'\d+(?:\.\d+)?', line)
+        text_blocks = re.findall(r'[A-Za-z]{2,}(?:\s+[A-Za-z]+)*', line)
+        
+        if len(numbers) >= 2 and text_blocks:
+            # Likely structure: [quantity] [item] [price]
+            custom_pattern = r'.*?(\d+(?:\.\d+)?).*?([A-Za-z0-9\s&\'.,\-]+?).*?(\d+\.\d{2}).*'
+            custom_groups = {"quantity": 1, "item_name": 2, "total_price": 3}
+            
+            if quantity == "1" and not re.search(r'\b1\b', line):
+                # Quantity might be implicit, structure: [item] [price]
+                custom_pattern = r'.*?([A-Za-z0-9\s&\'.,\-]+?).*?(\d+\.\d{2}).*'
+                custom_groups = {"item_name": 1, "total_price": 2, "quantity": None}
+        else:
+            # Fall back to exact matching if structure is unclear
             quantity_escaped = re.escape(quantity)
             item_escaped = re.escape(item_name)
             price_escaped = re.escape(price)
+            
+            custom_pattern = f".*({quantity_escaped}).*({item_escaped}).*({price_escaped}).*"
+            custom_groups = {"quantity": 1, "item_name": 2, "total_price": 3}
+        
+        return {
+            'start_line': item_lines[0]['line'],
+            'regex': custom_pattern,
+            'groups': custom_groups
+        }
 
-            # Create a pattern that matches this line
-            pattern = f".*({quantity_escaped}).*({item_escaped}).*({price_escaped}).*"
-            patterns.append({
-                'line': line,
-                'pattern': pattern,
-                'groups': {
-                    'quantity': 1,
-                    'item_name': 2,
-                    'total_price': 3
-                }
-            })
-
-        # For now, use the first pattern as our matcher
-        # A more sophisticated approach would find the most common pattern
-        if patterns:
-            return {
-                'start_line': item_lines[0]['line'],
-                'regex': patterns[0]['pattern'],
-                'groups': patterns[0]['groups']
-            }
-
-        return None
-
-    def _find_field_positions(self, end_line: Optional[int]) -> Dict[str, FieldExtractor]:
+    def _find_field_positions(self, start_line: int, end_line: int) -> Dict[str, FieldExtractor]:
         """
         Determine positions of fields relative to line items or absolute positions.
-        Uses both user corrections and predefined patterns to create the best possible extractor.
+        Uses fuzzy matching to find field positions and predefined patterns to create the best extractors.
         """
+        from rapidfuzz import fuzz
+        
         field_extractors = {}
+        field_mapping = {
+            'merchant_name': 'merchant_name',
+            'date': 'transaction_time',
+            'address': 'merchant_address',
+            'reference': 'reference_number',
+            'total_amount': 'total_amount',
+            'tax': 'tax_amount',
+            'subtotal_amount': 'subtotal_amount'
+        }
+        
+        # Skip if no corrections provided
+        if not self.corrected_values:
+            return field_extractors
 
-        # Process merchant name (typically at the top)
-        if self.corrected_values and self.corrected_values.get('merchant_name'):
-            merchant_name = self.corrected_values['merchant_name']
-            for i, line in enumerate(self.lines[:5]):  # Check first 5 lines
-                if merchant_name in line:
-                    pattern = f".*({re.escape(merchant_name)}).*"
-                    field_extractors['merchant_name'] = {
-                        'line': i,
-                        'offset_from_last_item': None,
-                        'regex': pattern,
-                        'expected_present': True
-                    }
-                    break
 
-        # Process date/transaction time (typically at the top)
-        if self.corrected_values and self.corrected_values.get('date'):
-            date_value = self.corrected_values['date']
+        before_items = list(range(0, start_line))
+        after_items = list(range(end_line + 1, len(self.lines)))
+        search_range = before_items + after_items
+
+        # Process each corrected field
+        for user_field, system_field in field_mapping.items():
+            # Skip if this field wasn't corrected
+            if not self.corrected_values.get(user_field):
+                continue
+                
+            corrected_value = self.corrected_values[user_field]
+            is_fuzzy_haystack = False
+            best_line: int = -1
             best_pattern = None
-            best_line = -1
+            best_offset = None
+            best_score = 0
 
-            # Try to find the line where the date appears
-            for i, line in enumerate(self.lines[:10]):  # Check first 10 lines
-                if date_value in line:
-                    best_line = i
-
-                    # Try to match using our predefined patterns first
-                    for pattern in self.FIELD_PATTERNS['transaction_time']:
-                        match = re.search(pattern, line)
-                        if match and match.group(1) == date_value:
-                            best_pattern = pattern
-                            break
-
-                    # If no predefined pattern matched, create a custom one
-                    if not best_pattern:
-                        best_pattern = f".*({re.escape(date_value)}).*"
-
-                    break
-
-            if best_line >= 0:
-                field_extractors['transaction_time'] = {
-                    'line': best_line,
-                    'offset_from_last_item': None,
-                    'regex': best_pattern,
-                    'expected_present': True
-                }
-
-        # Process address (typically at the top)
-        if self.corrected_values and self.corrected_values.get('address'):
-            address = self.corrected_values['address']
-            best_pattern = None
-            best_line = -1
-
-            # Try to find the line where the address appears
-            for i, line in enumerate(self.lines[:10]):  # Check first 10 lines
-                if address in line:
-                    best_line = i
-
-                    # Try to match using our predefined patterns first
-                    for pattern in self.FIELD_PATTERNS['merchant_address']:
-                        match = re.search(pattern, line)
-                        if match and match.group(1) == address:
-                            best_pattern = pattern
-                            break
-
-                    # If no predefined pattern matched, create a custom one
-                    if not best_pattern:
-                        best_pattern = f".*({re.escape(address)}).*"
-
-                    break
-
-            if best_line >= 0:
-                field_extractors['merchant_address'] = {
-                    'line': best_line,
-                    'offset_from_last_item': None,
-                    'regex': best_pattern,
-                    'expected_present': True
-                }
-
-        # For fields that appear after line items, use relative offsets
-        if end_line is not None:
-            # Process total amount (typically after line items)
-            if self.corrected_values and self.corrected_values.get('total_amount'):
-                total = self.corrected_values['total_amount']
-                best_pattern = None
-                best_offset = -1
-
-                # Try to find where the total appears
-                for i in range(end_line + 1, min(end_line + 10, len(self.lines))):
-                    if total in self.lines[i]:
-                        best_offset = i - end_line
-
-                        # Try our predefined patterns first
-                        for pattern in self.FIELD_PATTERNS['total_amount']:
-                            # Create version with currency symbol if available
-                            if self.currency_symbol and '\\d+\\.\\d{2}' in pattern:
-                                # Insert optional currency symbol before the amount
-                                symbol_pattern = pattern.replace('(\\d+\\.\\d{2})',
-                                                                 f'(?:{re.escape(self.currency_symbol)})?\\s*(\\d+\\.\\d{2})')
-                                match = re.search(
-                                    symbol_pattern, self.lines[i])
-                                if match and match.group(1) == total:
-                                    best_pattern = symbol_pattern
-                                    break
-
-                            # Try original pattern too
-                            match = re.search(pattern, self.lines[i])
-                            if match and match.group(1) == total:
-                                best_pattern = pattern
-                                break
-
-                        # If no pattern matched, create a custom one
-                        if not best_pattern:
-                            if self.currency_symbol:
-                                best_pattern = f".*(?:{re.escape(self.currency_symbol)})?\\s*({re.escape(total)}).*"
-                            else:
-                                best_pattern = f".*({re.escape(total)}).*"
-
-                        break
-
-                if best_offset >= 0:
-                    field_extractors['total_amount'] = {
-                        'line': None,
-                        'offset_from_last_item': best_offset,
-                        'regex': best_pattern,
-                        'expected_present': True
-                    }
-
-            # Process tax (typically after line items, before total)
-            if self.corrected_values and self.corrected_values.get('tax'):
-                tax = self.corrected_values['tax']
-                best_pattern = None
-                best_offset = -1
-
-                # Try to find where the tax appears
-                for i in range(end_line + 1, min(end_line + 10, len(self.lines))):
-                    if tax in self.lines[i]:
-                        best_offset = i - end_line
-
-                        # Try our predefined patterns first
-                        for pattern in self.FIELD_PATTERNS['tax_amount']:
-                            # Create version with currency symbol if available
-                            if self.currency_symbol and '\\d+\\.\\d{2}' in pattern:
-                                # Insert optional currency symbol before the amount
-                                symbol_pattern = pattern.replace('(\\d+\\.\\d{2})',
-                                                                 f'(?:{re.escape(self.currency_symbol)})?\\s*(\\d+\\.\\d{2})')
-                                match = re.search(
-                                    symbol_pattern, self.lines[i])
-                                if match and match.group(1) == tax:
-                                    best_pattern = symbol_pattern
-                                    break
-
-                            # Try original pattern too
-                            match = re.search(pattern, self.lines[i])
-                            if match and match.group(1) == tax:
-                                best_pattern = pattern
-                                break
-
-                        # If no pattern matched, create a custom one
-                        if not best_pattern:
-                            if self.currency_symbol:
-                                best_pattern = f".*(?:{re.escape(self.currency_symbol)})?\\s*({re.escape(tax)}).*"
-                            else:
-                                best_pattern = f".*({re.escape(tax)}).*"
-
-                        break
-
-                if best_offset >= 0:
-                    field_extractors['tax_amount'] = {
-                        'line': None,
-                        'offset_from_last_item': best_offset,
-                        'regex': best_pattern,
-                        'expected_present': True
-                    }
-
-            # Process reference number (can be anywhere, check after line items first)
-            if self.corrected_values and self.corrected_values.get('reference'):
-                ref = self.corrected_values['reference']
-                best_pattern = None
-                best_offset = -1
-
-                # Try after line items
-                for i in range(end_line + 1, min(end_line + 10, len(self.lines))):
-                    if ref in self.lines[i]:
-                        best_offset = i - end_line
-
-                        # Try to match using our predefined patterns first
-                        for pattern in self.FIELD_PATTERNS['reference_number']:
-                            match = re.search(pattern, self.lines[i])
-                            if match and match.group(1) == ref:
-                                best_pattern = pattern
-                                break
-
-                        # If no predefined pattern matched, create a custom one
-                        if not best_pattern:
-                            best_pattern = f".*({re.escape(ref)}).*"
-
-                        break
-
-                if best_offset >= 0:
-                    field_extractors['reference_number'] = {
-                        'line': None,
-                        'offset_from_last_item': best_offset,
-                        'regex': best_pattern,
-                        'expected_present': True
-                    }
-                else:
-                    # If not found after line items, check before line items
-                    best_line = -1
-                    for i in range(min(15, len(self.lines))):
-                        if ref in self.lines[i]:
-                            best_line = i
-
-                            # Try to match using our predefined patterns first
-                            for pattern in self.FIELD_PATTERNS['reference_number']:
-                                match = re.search(pattern, self.lines[i])
-                                if match and match.group(1) == ref:
-                                    best_pattern = pattern
-                                    break
-
-                            # If no predefined pattern matched, create a custom one
-                            if not best_pattern:
-                                best_pattern = f".*({re.escape(ref)}).*"
-
-                            break
-
-                    if best_line >= 0:
-                        field_extractors['reference_number'] = {
-                            'line': best_line,
-                            'offset_from_last_item': None,
-                            'regex': best_pattern,
-                            'expected_present': True
-                        }
-
-        # Process subtotal_amount if provided
-        if self.corrected_values and self.corrected_values.get('subtotal_amount'):
-            subtotal = self.corrected_values['subtotal_amount']
-            best_pattern = None
-            best_offset = -1
-            best_line = -1
-
-            # Try after line items if we have line items
-            if end_line is not None:
-                for i in range(end_line + 1, min(end_line + 10, len(self.lines))):
-                    if subtotal in self.lines[i]:
-                        best_offset = i - end_line
-
-                        # Try predefined patterns with currency symbol
-                        for pattern in self.FIELD_PATTERNS['subtotal_amount']:
-                            if self.currency_symbol and '\\d+\\.\\d{2}' in pattern:
-                                symbol_pattern = pattern.replace('(\\d+\\.\\d{2})',
-                                                                 f'(?:{re.escape(self.currency_symbol)})?\\s*(\\d+\\.\\d{2})')
-                                match = re.search(
-                                    symbol_pattern, self.lines[i])
-                                if match and match.group(1) == subtotal:
-                                    best_pattern = symbol_pattern
-                                    break
-
-                            # Try original pattern too
-                            match = re.search(pattern, self.lines[i])
-                            if match and match.group(1) == subtotal:
-                                best_pattern = pattern
-                                break
-
-                        if not best_pattern:
-                            if self.currency_symbol:
-                                best_pattern = f".*(?:{re.escape(self.currency_symbol)})?\\s*({re.escape(subtotal)}).*"
-                            else:
-                                best_pattern = f".*({re.escape(subtotal)}).*"
-
-                        break
-
-                if best_offset >= 0:
-                    field_extractors['subtotal_amount'] = {
-                        'line': None,
-                        'offset_from_last_item': best_offset,
-                        'regex': best_pattern,
-                        'expected_present': True
-                    }
+            if system_field == 'merchant_name':
+                search_range = range(min(end_line, len(self.lines), 3))
             else:
-                # If no line items, search through the entire receipt
-                for i, line in enumerate(self.lines):
-                    if subtotal in line:
+                before_items = list(range(0, start_line))
+                after_items = list(range(end_line + 1, len(self.lines)))
+                search_range = before_items + after_items
+
+            
+            # Find best matching line using fuzzy matching
+            for i in search_range:
+                line = self.lines[i]
+                
+                # Calculate similarity score between line and corrected value
+                score = fuzz.ratio(corrected_value.lower(), line.lower())
+                partial_score = fuzz.partial_ratio(corrected_value.lower(), line.lower())
+                token_score = fuzz.token_sort_ratio(corrected_value.lower(), line.lower())
+                token_set_score = fuzz.token_set_ratio(corrected_value.lower(), line.lower())
+                
+                max_score = max(score, partial_score, token_score, token_set_score)
+                
+                # Check for reversed match (line is part of corrected value)
+                # Useful for multi-line fields like address
+                reverse_score = fuzz.ratio(line.lower(), corrected_value.lower())
+
+                print(f"{system_field} - line {i} - {corrected_value} >> max: {max_score} and reverse: {reverse_score}")
+                print(f"\t{line}")
+                
+                # If this line matches better than previous ones
+                if max_score > best_score and max_score > 70:
+                    best_score = max_score
+                    print("—————————————————————", best_score)
+                    if end_line is not None and i > end_line:
+                        best_offset = i - end_line
+                        best_line = -1
+                    else:
                         best_line = i
+                        best_offset = None
+                
+                # Check for multi-line scenario (especially for addresses)
+                if system_field == 'merchant_address' and reverse_score > 80 and reverse_score > best_score:
+                    is_fuzzy_haystack = True
+                    best_score = reverse_score
+                    best_line = i
+                    best_offset = None
 
-                        # Try predefined patterns
-                        for pattern in self.FIELD_PATTERNS['subtotal_amount']:
-                            match = re.search(pattern, line)
-                            if match and match.group(1) == subtotal:
+            print(f"best_line: {best_line}. best_offset: {best_offset}")
+            
+            # If we found a matching line
+            if best_line >= 0 or best_offset is not None:
+                # Try each pattern from FIELD_PATTERNS to find best performing one
+                patterns = self.FIELD_PATTERNS.get(system_field, [])
+                print("patterns", patterns)
+                target_line: int = 0
+                if best_offset is None:
+                    target_line = best_line
+                else:
+                    target_line = end_line + best_offset
+
+                if 0 <= target_line < len(self.lines):
+                    best_pattern_score = 0
+                    
+                    for pattern in patterns:
+                        match = re.search(pattern, self.lines[target_line])
+                        if match and match.groups():
+                            extracted = match.group(1)
+                            
+                            # Score this extraction against corrected value
+                            pattern_score = fuzz.ratio(corrected_value, extracted)
+                            
+                            if pattern_score > best_pattern_score:
+                                best_pattern_score = pattern_score
                                 best_pattern = pattern
-                                break
-
-                        if not best_pattern:
-                            best_pattern = f".*({re.escape(subtotal)}).*"
-
-                        break
-
-                if best_line >= 0:
-                    field_extractors['subtotal_amount'] = {
-                        'line': best_line,
-                        'offset_from_last_item': None,
-                        'regex': best_pattern,
-                        'expected_present': True
-                    }
-
+                
+                # If no pattern matched well, create a custom one
+                if not best_pattern:
+                    if system_field in ['total_amount', 'tax_amount', 'subtotal_amount'] and self.currency_symbol:
+                        best_pattern = f".*(?:{re.escape(self.currency_symbol)})?\\s*({re.escape(corrected_value)}).*"
+                    else:
+                        best_pattern = f".*({re.escape(corrected_value)}).*"
+                
+                # Create the field extractor
+                field_extractors[system_field] = {
+                    'line': best_line,
+                    'offset_from_last_item': best_offset,
+                    'regex': best_pattern,
+                    'expected_present': True,
+                    'is_fuzzy_haystack': is_fuzzy_haystack if is_fuzzy_haystack else False
+                }
+                
+                logger.info(f"Found {system_field} at {'line ' + str(best_line) if best_line >= 0 else 'offset ' + str(best_offset)} with score {best_score}")
+        
         return field_extractors
 
     def _create_template_from_corrections(self) -> TemplateData:
@@ -604,7 +640,7 @@ class OCRTemplate:
 
         # Create template structure
         template: TemplateData = {
-            'field_extractors': self._find_field_positions(end_line),
+            'field_extractors': self._find_field_positions(start_line, end_line),
             'has_line_items': bool(items),
             'line_items': None
         }
@@ -626,17 +662,26 @@ class OCRTemplate:
         if self.template_data is None:
             return {"error": "Template data not available"}
 
+        print("\ntemplate_data =======================================================================")
+        print(json.dumps(self.template_data, indent=3))
+        print("=====================================================================================\n")
+
         # Convert our simplified field_extractors to the model format
         for field, extractor in self.template_data['field_extractors'].items():
+            print(field)
+            print(json.dumps(extractor), "\n")
             field_extractors[field] = {
                 'expected_present': extractor.get('expected_present', True),
                 'patterns': [extractor['regex']],
+                'is_fuzzy_haystack': extractor.get('is_fuzzy_haystack', False)
             }
 
             if extractor['line'] is not None:
                 field_extractors[field]['line'] = extractor['line']
-            elif extractor['offset_from_last_item'] is not None:
-                field_extractors[field]['offset_from_last_item'] = extractor['offset_from_last_item']
+            if 'offset_from_last_item' in extractor:
+                if extractor['offset_from_last_item'] is None:
+                    extractor['offset_from_last_item'] = 0
+                field_extractors[field]['offset_from_last_item'] = int(extractor['offset_from_last_item'])
 
         # Convert line items to the model format
         item_patterns = []
@@ -679,12 +724,20 @@ class OCRTemplate:
         Returns:
             Dictionary of extracted fields
         """
+        print("\n=====================================================================================")
+        print("\nEXTRACTING")
+        print("\n=====================================================================================\n")
         # First detect the currency before extraction
         self._detect_currency()
+
+        print("currency code:", self.currency_code)
+        print("currency symbol", self.currency_symbol)
 
         extracted_data = {}
         field_extractors = template_model_data.get('field_extractors', {})
         has_line_items = template_model_data.get('has_line_items', True)
+
+        print("I'm here (extract)")
 
         # First pass: extract fields with absolute line positions
         for field, extractor in field_extractors.items():
@@ -693,55 +746,61 @@ class OCRTemplate:
 
             # Get line position information
             line = extractor.get('line')
-            line_hints = extractor.get('line_hints', [])
+            is_fuzzy_haystack = extractor.get('is_fuzzy_haystack', False)
 
             # If we have a direct line number, use it
             if line is not None and 0 <= line < len(self.lines):
-                patterns = [extractor.get('regex')]
+                patterns = extractor.get('patterns', [])
+                if not patterns and 'regex' in extractor:
+                    patterns = [extractor['regex']]
 
                 # For monetary fields, create currency-aware variants
                 if field in ['total_amount', 'tax_amount', 'subtotal_amount'] and self.currency_symbol:
-                    # Create two pattern variants - with and without currency symbol
-                    if '\\d+\\.\\d{2}' in patterns[0]:
-                        symbol_pattern = patterns[0].replace('(\\d+\\.\\d{2})',
+                    # Create pattern variants with and without currency symbol
+                    currency_patterns = []
+                    for pattern in patterns:
+                        if '\\d+\\.\\d{2}' in pattern:
+                            symbol_pattern = pattern.replace('(\\d+\\.\\d{2})',
                                                              f'(?:{re.escape(self.currency_symbol)})?\\s*(\\d+\\.\\d{2})')
-                        patterns = [symbol_pattern, patterns[0]]
+                            currency_patterns.append(symbol_pattern)
+                    patterns = currency_patterns + patterns
 
                 # Try each pattern
                 for pattern in patterns:
                     if not pattern:
                         continue
 
-                    match = re.search(pattern, self.lines[line])
-                    if match and match.groups():
-                        extracted_data[field] = match.group(1)
-                        break
-
-            # If we have line hints, try those too
-            elif line_hints:
-                patterns = [extractor.get('regex')]
-
-                # For monetary fields, create currency-aware variants
-                if field in ['total_amount', 'tax_amount', 'subtotal_amount'] and self.currency_symbol:
-                    if '\\d+\\.\\d{2}' in patterns[0]:
-                        symbol_pattern = patterns[0].replace('(\\d+\\.\\d{2})',
-                                                             f'(?:{re.escape(self.currency_symbol)})?\\s*(\\d+\\.\\d{2})')
-                        patterns = [symbol_pattern, patterns[0]]
-
-                # Try each line hint with each pattern
-                for line_hint in line_hints:
-                    if 0 <= line_hint < len(self.lines):
-                        for pattern in patterns:
-                            if not pattern:
-                                continue
-
-                            match = re.search(pattern, self.lines[line_hint])
-                            if match and match.groups():
-                                extracted_data[field] = match.group(1)
-                                break
-
-                        # If we found a match, move to the next field
-                        if field in extracted_data:
+                    # Handle fuzzy haystack case (multi-line fields)
+                    if is_fuzzy_haystack:
+                        from rapidfuzz import fuzz
+                        
+                        # In fuzzy haystack mode, the corrected value is in the regex pattern
+                        # and we need to find it in the surrounding lines
+                        haystack = re.sub(r'^\.\*\(', '', pattern)
+                        haystack = re.sub(r'\)\.\*$', '', haystack)
+                        haystack = re.sub(r'\\', '', haystack)  # Remove escaping
+                        
+                        # Check current line and a few lines below for matches
+                        best_match = ""
+                        best_score = 0
+                        
+                        for i in range(line, min(line + 5, len(self.lines))):
+                            score = fuzz.partial_ratio(self.lines[i].lower(), haystack.lower())
+                            if score > best_score and score > 70:
+                                best_score = score
+                                if best_match:
+                                    best_match += " " + self.lines[i]
+                                else:
+                                    best_match = self.lines[i]
+                        
+                        if best_match:
+                            extracted_data[field] = best_match
+                            break
+                    else:
+                        # Standard regex matching
+                        match = re.search(pattern, self.lines[line])
+                        if match and match.groups():
+                            extracted_data[field] = match.group(1)
                             break
 
         # Extract line items if present and enabled
@@ -787,8 +846,14 @@ class OCRTemplate:
             # Extract items
             if start_line is not None:
                 end_line = start_line
-                for i in range(start_line, len(self.lines)):
+                # Keep track of the current item for potential multiline descriptions
+                current_item = None
+                i = start_line
+                
+                print("LINE ITEMS")
+                while i < len(self.lines):
                     matched = False
+                    # Try to match this line against our item patterns
                     for pattern_def in item_patterns:
                         # Create both regular and currency-symbol versions
                         patterns = [pattern_def['pattern']]
@@ -802,31 +867,78 @@ class OCRTemplate:
                             if match:
                                 item_data = {}
                                 for field, group_idx in pattern_def['groups'].items():
-                                    if len(match.groups()) >= group_idx:
-                                        item_data[field] = match.group(
-                                            group_idx)
-
+                                    if group_idx is not None and len(match.groups()) >= group_idx:
+                                        item_data[field] = match.group(group_idx)
+                                    elif field == "quantity" and group_idx is None:
+                                        item_data[field] = "1"  # Default quantity if not in pattern
+                                print("---------------------- ITEM_DATA --------------------")
+                                if set(["total_price", "quantity"]).issubset(pattern_def['groups'].keys()):
+                                    item_data['unit_price'] = f"{(float(item_data['total_price']) / float(item_data['quantity'])):.2f}"
+                                print(json.dumps(item_data))
+                                print("---------------------- ITEM_DATA END --------------------")
                                 if item_data:
+                                    # Found a new regular item
                                     line_items.append(item_data)
+                                    current_item = item_data  # Track as current item for potential continuation
                                     end_line = i
                                     matched = True
                                     break
                         if matched:
                             break
 
-                    if not matched and line_items:
-                        # If we didn't find a match for any pattern, check if we already found items
-                        # If we've already found items, this could be the end of the items section
-                        # Try a few more lines before giving up
-                        if i > end_line + 3:
-                            break
+                    if not matched:
+                        # This line didn't match any item pattern
+                        
+                        # Check if it might be a continuation of the previous item
+                        if current_item and i == end_line + 1:
+                            line_text = self.lines[i].strip()
+                            
+                            # Skip lines that look like they're not part of an item description
+                            # These lines indicate either the end of the item or the start of a new item
+                            skip_patterns = [
+                                r'^\s*\d+\.\d{2}\s*$',                    # Just a price
+                                r'^\s*(?:total|subtotal|tax|vat|savings|promotions)[\s:]+', # Common receipt sections
+                                r'^\s*$',                                 # Empty line
+                                r'^\s*[-=*]+\s*$',                        # Separator line
+                                r'^\s*\d+(?:\s*x)?\s*\d+\.\d{2}',         # Quantity and price pattern
+                                r'^\s*[£$€]?\d+\.\d{2}\s*(?:-[£$€]?\d+\.\d{2})?$', # Price or discount pattern
+                                r'^\s*[£$€]?\d+\.\d{2}\s*each',           # Unit price pattern
+                                r'^\s*\d+\s+',                            # Line starting with quantity (new item)
+                                r'^[Cc][Cc]',                             # Card or loyalty card references
+                            ]
+                            
+                            is_skip_line = any(re.search(pattern, line_text, re.IGNORECASE) 
+                                              for pattern in skip_patterns)
+                            
+                            # Don't treat very short lines as continuations (likely OCR artifacts)
+                            if not is_skip_line and len(line_text) > 2:
+                                # Append to the item name field
+                                item_name_field = 'item_name' if 'item_name' in current_item else 'item'
+                                if item_name_field in current_item:
+                                    current_item[item_name_field] += ' ' + line_text
+                                    end_line = i  # Update end_line to include this continuation
+                                    matched = True
+                            
+                        if not matched and line_items:
+                            # If we didn't find a match for any pattern, check if we already found items
+                            # If we've already found items, this could be the end of the items section
+                            # Try a few more lines before giving up
+                            if i > end_line + 3:
+                                break
+                    
+                    i += 1
 
                 # Store the last line of items for second pass
                 if line_items:
                     extracted_data['_last_item_line'] = end_line
 
+        print("LAST_ITEM_LINE")
+        print(json.dumps(extracted_data[ '_last_item_line' ]))
+
         # Second pass: extract fields with relative positions from line items
         if '_last_item_line' in extracted_data:
+            print("HERE")
+            print(json.dumps(field_extractors, indent=3))
             last_item_line = extracted_data['_last_item_line']
 
             for field, extractor in field_extractors.items():
@@ -834,26 +946,61 @@ class OCRTemplate:
                     continue
 
                 offset = extractor.get('offset_from_last_item')
+                is_fuzzy_haystack = extractor.get('is_fuzzy_haystack', False)
+                
                 if offset is not None:
                     target_line = last_item_line + offset
                     if 0 <= target_line < len(self.lines):
-                        patterns = [extractor.get('regex')]
+                        patterns = extractor.get('patterns', [])
+                        if not patterns and 'regex' in extractor:
+                            patterns = [extractor['regex']]
 
                         # For monetary fields, create currency-aware variants
                         if field in ['total_amount', 'tax_amount', 'subtotal_amount'] and self.currency_symbol:
-                            if patterns[0] and '\\d+\\.\\d{2}' in patterns[0]:
-                                symbol_pattern = patterns[0].replace('(\\d+\\.\\d{2})',
-                                                                     f'(?:{re.escape(self.currency_symbol)})?\\s*(\\d+\\.\\d{2})')
-                                patterns = [symbol_pattern, patterns[0]]
+                            currency_patterns = []
+                            for pattern in patterns:
+                                if '\\d+\\.\\d{2}' in pattern:
+                                    symbol_pattern = pattern.replace('(\\d+\\.\\d{2})',
+                                                                    f'(?:{re.escape(self.currency_symbol)})?\\s*(\\d+\\.\\d{2})')
+                                    currency_patterns.append(symbol_pattern)
+                            patterns = currency_patterns + patterns
 
                         for pattern in patterns:
                             if not pattern:
                                 continue
-
-                            match = re.search(pattern, self.lines[target_line])
-                            if match and match.groups():
-                                extracted_data[field] = match.group(1)
-                                break
+                                
+                            # Handle fuzzy haystack case (multi-line fields)
+                            if is_fuzzy_haystack:
+                                from rapidfuzz import fuzz
+                                
+                                # In fuzzy haystack mode, the corrected value is in the regex pattern
+                                # and we need to find it in the surrounding lines
+                                haystack = re.sub(r'^\.\*\(', '', pattern)
+                                haystack = re.sub(r'\)\.\*$', '', haystack)
+                                haystack = re.sub(r'\\', '', haystack)  # Remove escaping
+                                
+                                # Check current line and a few lines below for matches
+                                best_match = ""
+                                best_score = 0
+                                
+                                for i in range(target_line, min(target_line + 5, len(self.lines))):
+                                    score = fuzz.partial_ratio(self.lines[i].lower(), haystack.lower())
+                                    if score > best_score and score > 70:
+                                        best_score = score
+                                        if best_match:
+                                            best_match += " " + self.lines[i]
+                                        else:
+                                            best_match = self.lines[i]
+                                
+                                if best_match:
+                                    extracted_data[field] = best_match
+                                    break
+                            else:
+                                # Standard regex matching
+                                match = re.search(pattern, self.lines[target_line])
+                                if match and match.groups():
+                                    extracted_data[field] = match.group(1)
+                                    break
 
         # Add line items to the output
         if line_items:
@@ -867,5 +1014,7 @@ class OCRTemplate:
         # Clean up internal fields
         if '_last_item_line' in extracted_data:
             del extracted_data['_last_item_line']
+
+        print("extracted_data", extracted_data)
 
         return extracted_data

@@ -21,6 +21,7 @@ class ProcessingJob(Document):
         ('confirmed', 'Confirmed'),  # User has confirmed the data
         ('failed', 'Failed'),
         ('discarded', 'Discarded'),  # User discarded the job
+        ('abandoned', 'Abandoned'),  # Job was never confirmed/discarded and expired
     )
     
     id = UUIDField(primary_key=True, default=uuid.uuid4)
@@ -28,11 +29,7 @@ class ProcessingJob(Document):
     status = StringField(max_length=20, choices=STATUS_CHOICES, default='pending')
     original_filename = StringField(max_length=255)
     file_type = StringField(max_length=50)
-    uploaded_file = FileField(upload_to=job_directory_path)
-    
-    # GridFS storage details (filled when confirmed and transferred)
-    gridfs_id = StringField(max_length=50, required=False)
-    storage_path = StringField(max_length=255, required=False)
+    uploaded_file = FileField(default=None, cascade_delete=False,)
     
     # Celery task tracking
     task_id = StringField(max_length=50, required=False,
@@ -42,10 +39,10 @@ class ProcessingJob(Document):
     metadata = DictField(default=dict)
     
     # Processing details
-    processed_data = DictField(required=False)
+    extracted_data = DictField(required=False, help_text="Original data extracted by the OCR system")
+    user_corrections = DictField(required=False, help_text="Corrections made by the user")
     error_message = StringField(required=False)
-    ocr_confidence = FloatField(default=0.0)
-    needs_review = BooleanField(default=False)
+    template_correspondence = FloatField(default=0.0)
     template_used = StringField(max_length=50, required=False,
                              help_text="ID of the template used for parsing")
     

@@ -18,11 +18,20 @@ from urllib import parse
 import os
 from datetime import timedelta
 from os import path
+import sys
 
 django_stubs_ext.monkeypatch()
 
-mongodb_socket = parse.quote_plus(
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+MONGODB_SOCKET = parse.quote_plus(
     path.join('../', 'general', 'server', 'db',  'general.sock'))
+
+sys.path.append(str(BASE_DIR.parent))
+
+sys.path.append(str(BASE_DIR))
+
+print(sys.path)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,7 +43,9 @@ TEMP_UPLOAD_DIR = os.path.join(BASE_DIR, 'server', 'tmp_uploads')
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-5i6pn3o7a%2k^fqd225!9-oe6twy0*%t38fju+c^jv$4%(i(t#'
+SECRET_KEY = 'django-insecure-oyajap)nc^ur#$v)67oj4p86=2sezj$5pwx$!f%e2gmu=xxjqr'
+
+# This must match the general server's SECRET_KEY for JWT verification to work
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -62,19 +73,24 @@ MIDDLEWARE = [
     # Removed CSRF middleware as it's not needed for API-only service
     'django.contrib.auth.middleware.AuthenticationMiddleware',  # Required for JWT auth
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'apps.jobs.views.APIKeyAuthentication',  # API key authentication middleware
+    # 'apps.jobs.views.APIKeyAuthentication',  # API key authentication middleware
 ]
 
-# Celery Configuration
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+# Celery Configuration with MongoDB backend
+CELERY_BROKER_URL = f'mongodb://localhost:27017/celery'
+CELERY_RESULT_BACKEND = f'mongodb://localhost:27017/celery'
+CELERY_MONGODB_BACKEND_SETTINGS = {
+    'database': 'celery',
+    'taskmeta_collection': 'celery_taskmeta',
+    'groupmeta_collection': 'celery_groupmeta',
+}
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
-CELERY_WORKER_CONCURRENCY = 3  # Limit to 3 concurrent jobs
+CELERY_WORKER_CONCURRENCY = 4  # Limit to 3 concurrent jobs
 CELERY_TASK_ACKS_LATE = True  # Ensure tasks aren't lost on worker crash
 
 # Celery Beat Schedule
@@ -116,11 +132,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'parser.wsgi.application'
 
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-}
+# REST_FRAMEWORK = {
+#     'DEFAULT_AUTHENTICATION_CLASSES': (
+#         'rest_framework_simplejwt.authentication.JWTAuthentication',
+#     ),
+# }
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
@@ -144,7 +160,7 @@ SIMPLE_JWT = {
 # Connect to MongoDB
 mongoengine.connect(
     db='receipt_scanner_db',
-    host='mongodb://'+mongodb_socket
+    host='mongodb://'+MONGODB_SOCKET
 )
 
 # Django still needs a database for its own functionality
@@ -182,6 +198,15 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Cache settings
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-mindset',
+        'TIMEOUT': 3600,  # 1 hour default timeout
+    }
+}
 
 # API Authentication Key
 API_KEY = 'test_api_key'

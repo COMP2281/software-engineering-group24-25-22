@@ -16,11 +16,6 @@ class ParserService:
     
     def __init__(self):
         self.base_url = settings.FILE_PARSER_SERVER_URL
-        self.api_key = settings.FILE_PARSER_API_KEY
-        self.headers = {
-            'Authorization': f'ApiKey {self.api_key}',
-            'Accept': 'application/json',
-        }
     
     def _handle_response(self, response):
         """Process the response from the File Parsing Server"""
@@ -42,38 +37,63 @@ class ParserService:
             detail=error_detail
         )
     
-    def upload_receipt(self, file_obj, metadata):
-        """Upload a receipt to the File Parsing Server"""
-        url = f"{self.base_url}/api/parser/upload/"
+    def parse_receipt(self, file_obj, metadata, user_token=None):
+        """Parse a receipt using the File Parsing Server (blocking request)"""
+        url = f"{self.base_url}/api/parser/parse/"
         
         # Prepare multipart form data
         files = {'file': file_obj}
         
-        # Send metadata as JSON with custom encoder for MongoDB ObjectId
-        from .json_utils import MongoJSONEncoder
-        headers = self.headers.copy()
+        # Prepare headers
+        from common.json_utils import MongoJSONEncoder
+        
+        headers = {}
+
+        # Add metadata
         headers['X-Receipt-Metadata'] = json.dumps(metadata, cls=MongoJSONEncoder)
         
+        # Forward the user's JWT token if provided
+        if user_token:
+            headers['Authorization'] = f'Bearer {user_token}'
+        
+        # Make the request (blocks until processing is complete)
         response = requests.post(url, files=files, headers=headers)
         return self._handle_response(response)
     
-    def get_job_status(self, job_id):
+    def get_job_status(self, job_id, user_token):
         """Get the status of a processing job"""
         url = f"{self.base_url}/api/parser/status/{job_id}/"
-        response = requests.get(url, headers=self.headers)
+        headers = {}
+
+        if user_token:
+            headers['Authorization'] = f'Bearer {user_token}'
+        else:
+            raise ParserServiceError("User token required to confirm job")
+
+        response = requests.get(url, headers=headers)
         return self._handle_response(response)
     
-    def confirm_job(self, job_id, user_id):
-        """Confirm a processed receipt"""
+    def confirm_job(self, job_id, corrections, user_token):
+        """Confirm a processed receipt with optional corrections"""
         url = f"{self.base_url}/api/parser/confirm/{job_id}/"
         
         # Use MongoJSONEncoder to handle ObjectId and Decimal
-        from .json_utils import MongoJSONEncoder
+        from common.json_utils import MongoJSONEncoder
         
-        # Convert data to JSON string with custom encoder
-        data = {'user_id': user_id}
-        headers = self.headers.copy()
+        # Add corrections if provided
+        data = {}
+        if corrections:
+            data['corrections'] = corrections
+            
+        # Prepare headers
+        headers = {}
         headers['Content-Type'] = 'application/json'
+        
+        # Forward the user's JWT token if provided
+        if user_token:
+            headers['Authorization'] = f'Bearer {user_token}'
+        else:
+            raise ParserServiceError("User token required to confirm job")
         
         # Convert to JSON-safe format
         data_str = json.dumps(data, cls=MongoJSONEncoder)
@@ -81,26 +101,18 @@ class ParserService:
         response = requests.post(url, data=data_str, headers=headers)
         return self._handle_response(response)
     
-    def discard_job(self, job_id):
+    def discard_job(self, job_id, user_token):
         """Discard a processing job"""
         url = f"{self.base_url}/api/parser/discard/{job_id}/"
         
-        response = requests.delete(url, headers=self.headers)
-        return self._handle_response(response)
-    
-    def edit_job_data(self, job_id, validated_data):
-        """Edit the data extracted from a receipt"""
-        url = f"{self.base_url}/api/parser/edit/{job_id}/"
+        # Prepare headers
+        headers = {}
         
-        # Use MongoJSONEncoder to handle ObjectId and Decimal
-        from .json_utils import MongoJSONEncoder
+        # Forward the user's JWT token if provided
+        if user_token:
+            headers['Authorization'] = f'Bearer {user_token}'
+        else:
+            raise ParserServiceError("User token required to discard job")
         
-        # Convert data to JSON string with custom encoder
-        headers = self.headers.copy()
-        headers['Content-Type'] = 'application/json'
-        
-        # Convert to JSON-safe format
-        data_str = json.dumps(validated_data, cls=MongoJSONEncoder)
-        
-        response = requests.post(url, data=data_str, headers=headers)
+        response = requests.delete(url, headers=headers)
         return self._handle_response(response)

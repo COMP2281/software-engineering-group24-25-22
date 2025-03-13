@@ -1,10 +1,15 @@
 import os
 import logging
 import tempfile
+from typing import Optional
 from PIL import Image
 from pathlib import Path
 from django.utils import timezone
 from django.conf import settings
+import json
+
+from apps.jobs.models import ProcessingJob
+from apps.jobs.utils import temp_file_path
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +22,10 @@ class OCRProcessor:
     Class for OCR processing of receipt images using the template system.
     Handles different file types and extracts structured data.
     """
+
+    job:ProcessingJob
     
-    def __init__(self, job=None):
+    def __init__(self, job: ProcessingJob):
         """
         Initialize processor with an optional job instance.
         
@@ -27,15 +34,9 @@ class OCRProcessor:
                  stored in the job record.
         """
         self.job = job
-        self.output_path = None
-        
-        if job:
-            self.base_path = Path(settings.TEMP_UPLOAD_DIR)
-            self.output_path = self.base_path / str(job.job_id)
-            # Create output directory if it doesn't exist
-            os.makedirs(self.output_path, exist_ok=True)
+        self.temp_file_path = temp_file_path(job)
     
-    def process_file(self, file_path=None, file_type=None):
+    def process_file(self):
         """
         Main processing method that delegates to appropriate handler
         based on file type.
@@ -47,30 +48,23 @@ class OCRProcessor:
         Returns:
             dict: Extracted data from the receipt
         """
-        print(self.job)
-        print(self.job.uploaded_file_path)
-        print(self.job.file_type)
-        if self.job:
-            file_path = self.job.uploaded_file.path
-            file_type = self.job.file_type.lower()
-        elif not file_path or not file_type:
-            raise OCRProcessorError("Either job or file_path and file_type must be provided")
-        else:
-            file_type = file_type.lower()
-        
+
         # Process based on file type
-        if 'image' in file_type:
-            result = self._process_image(file_path)
-        elif 'pdf' in file_type:
-            result = self._process_pdf(file_path)
-        elif 'json' in file_type:
-            result = self._process_json(file_path)
+        if 'image' in self.job.file_type:
+            result = self._process_image(self.temp_file_path)
+        elif 'pdf' in self.job.file_type:
+            result = self._process_pdf(self.temp_file_path)
+        elif 'json' in self.job.file_type:
+            result = self._process_json(self.temp_file_path)
         else:
-            raise OCRProcessorError(f"Unsupported file type: {file_type}")
+            raise OCRProcessorError(f"Unsupported file type: {self.job.file_type}")
         
         # Store results in job if available
         if self.job:
-            self.job.processed_data = result
+            print("------------------------- PROCESSED DATA -----------------------")
+            print(json.dumps(result))
+            print("------------------------- PROCESSED DATA END -------------------")
+            self.job.extracted_data = result
             self.job.save()
         
         return result
@@ -108,7 +102,7 @@ class OCRProcessor:
         #         self.job.save()
         #     raise OCRProcessorError(f"Processing failed: {str(e)}")
     
-    def _process_image(self, image_path):
+    def _process_image(self, image_path: Optional[str] = None, image_pil: Optional[Image.Image] = None):
         """
         Process an image file using OCR and template matching
         
@@ -131,23 +125,19 @@ class OCRProcessor:
             # 2. Run OCR to extract text
             try:
                 # Open the image using PIL
-                image = Image.open(image_path)
+                image: Image.Image
+
+                if image_path and isinstance(image_path, str):
+                    image = Image.open(image_path)
+                elif image_pil and isinstance(image_pil, Image.Image):
+                    image = image_pil
+                else: 
+                    OCRProcessorError("No image provided")
                 
                 # Run OCR on the image (using pytesseract in a real implementation)
-                # ocr_text = pytesseract.image_to_string(image)
+                ocr_text = pytesseract.image_to_string(image)
                 
                 # For demo purposes, simulate OCR text
-                ocr_text = """Example Store
-123 Main St
-Date: 02/15/2025
-Register: 2
---------------------------
-1 Sample Item      $42.99
---------------------------
-Subtotal:         $42.99
-Tax:               $3.01
-Total:            $46.00
-"""
             except Exception as e:
                 logger.error(f"OCR error: {str(e)}")
                 raise OCRProcessorError(f"Failed to extract text from image: {str(e)}")
@@ -161,33 +151,28 @@ Total:            $46.00
             
             # Get data from response
             extracted_data = result.get('extracted_data', {})
-            confidence = result.get('confidence', 0) / 100  # Convert percentage to decimal
+            template_correspondence = result.get('correspondence', 0) / 100  # Convert percentage to decimal
             template_id = result.get('template_id')
-            needs_review = result.get('needs_review', True)
             
             # Store results in job if available
             if self.job:
-                self.job.ocr_confidence = confidence
-                self.job.needs_review = needs_review
+                self.job.template_correspondence = template_correspondence
                 if template_id:
                     self.job.template_used = str(template_id)
                 
                 # Store the OCR text in job metadata for template learning
                 if 'metadata' in dir(self.job) and hasattr(self.job, 'metadata'):
                     self.job.metadata['ocr_text'] = ocr_text
+                    self.job.metadata['ocr_text_preprocessed'] = TemplateSuite.preprocess_ocr_text(ocr_text)
             
-            # Convert from API format to internal format
-            processed_data = TemplateSuite.convert_to_internal_format(extracted_data)
-            
-            return processed_data
+            return extracted_data
             
         except Exception as e:
             logger.error(f"Image processing error: {str(e)}")
             
             # If we have a job, mark it for review since extraction failed
             if self.job:
-                self.job.needs_review = True
-                self.job.ocr_confidence = 0.0
+                self.job.template_correspondence = 0.0
             
             # Return fallback data
             return {
@@ -208,34 +193,10 @@ Total:            $46.00
         Returns:
             dict: Extracted data from the receipt
         """
+        from pdf2image import convert_from_path
         logger.info(f"Processing PDF: {pdf_path}")
         
-        # In a real implementation, this would:
-        # 1. Convert PDF to images
-        # 2. Process each page as an image
-        # 3. Combine results if needed
-        
-        # For simulation, we'll return placeholder data with lower confidence
-        
-        # Set confidence level
-        confidence = 0.75
-        
-        # Store confidence if using a job
-        if self.job:
-            self.job.ocr_confidence = confidence
-            self.job.needs_review = True  # Always need review for PDFs
-        
-        # Return simulated extraction results
-        return {
-            'merchant_name': 'PDF Example Corp',
-            'transaction_time': timezone.now().isoformat(),
-            'total_amount': '123.45',
-            'currency': 'USD',
-            'line_items': [
-                {'item_name': 'PDF Item 1', 'quantity': 2, 'unit_price': '50.00', 'total_price': '100.00'},
-                {'item_name': 'PDF Item 2', 'quantity': 1, 'unit_price': '23.45', 'total_price': '23.45'}
-            ]
-        }
+        return self._process_image(image_pil=convert_from_path(pdf_path)[0])
     
     def _process_json(self, json_path):
         """
@@ -254,9 +215,8 @@ Total:            $46.00
         with open(json_path, 'r') as f:
             data = json.load(f)
         
-        # Set confidence to 1.0 (perfect) for JSON
+        # Set correspondence to 1.0 (perfect) for JSON
         if self.job:
-            self.job.ocr_confidence = 1.0
-            self.job.needs_review = False
+            self.job.template_correspondence = 2.0
         
         return data

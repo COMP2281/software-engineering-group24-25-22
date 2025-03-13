@@ -19,9 +19,6 @@ class Command(BaseCommand):
             currency_info={
                 "iso_code": "GBP",
                 "symbol": "£",
-                "decimal_separator": ".",
-                "thousands_separator": ",",
-                "typical_format": "£X,XXX.XX"
             },
             field_extractors={
                 "merchant_name": {
@@ -30,7 +27,7 @@ class Command(BaseCommand):
                         "^([A-Z][A-Za-z0-9\\s&.']+)$",  # Capitalized name at start of line
                         "^(.{5,50})$"  # Any reasonable length text at start of line
                     ],
-                    "line_hints": [0, 1, 2]  # Usually in first 3 lines
+                    "line": 0  # Usually in first line
                 },
                 "transaction_time": {
                     "expected_present": True,
@@ -39,7 +36,7 @@ class Command(BaseCommand):
                         "(\\d{1,2}[/\\-]\\d{1,2}[/\\-]\\d{2,4})[\\s]*\\d{1,2}:\\d{2}",  # MM/DD/YYYY HH:MM
                         "\\b(\\d{1,2}[/\\-]\\d{1,2}[/\\-]\\d{2,4})\\b"  # Just the date anywhere
                     ],
-                    "line_hints": [2, 3, 4, 5, 6]  # Usually in first few lines
+                    "line": 3  # Try line 3 as a reasonable default
                 },
                 "merchant_address": {
                     "expected_present": True,
@@ -47,7 +44,7 @@ class Command(BaseCommand):
                         "([A-Za-z0-9\\s,.']+,\\s*[A-Z]{1,2}\\d{1,2}\\s*\\d[A-Z]{2})",  # UK postcode format
                         "([A-Za-z0-9\\s,.']+,\\s*[A-Z]{2}\\s*\\d{5})"  # US ZIP code format
                     ],
-                    "line_hints": [1, 2, 3, 4]  # Usually after merchant name
+                    "line": 1  # Usually right after merchant name
                 },
                 "reference_number": {
                     "expected_present": False,
@@ -55,7 +52,7 @@ class Command(BaseCommand):
                         "(?:receipt|order|ref|invoice)[\\s#:]*([A-Za-z0-9\\-]+)",  # After keywords
                         "\\b(\\d{5,})\\b"  # Any 5+ digit number as fallback
                     ],
-                    "line_hints": [2, 3, 4, 5, 6, 7, 8, 9, 10]  # Can be anywhere in header
+                    "line": 4  # Try line 4 as a reasonable default
                 },
                 "total_amount": {
                     "expected_present": True,
@@ -65,7 +62,7 @@ class Command(BaseCommand):
                         "(?:sum|due|pay)[\\s:]*[£$€]?(\\d+\\.\\d{2})",  # Other keywords
                         "[£$€]?\\s*(\\d+\\.\\d{2})\\s*$"  # Currency amount at end of line
                     ],
-                    "offset_from_items": 3  # Usually a few lines after last line item
+                    "offset_from_last_item": 3  # Usually a few lines after last line item
                 },
                 "tax_amount": {
                     "expected_present": False,
@@ -73,7 +70,7 @@ class Command(BaseCommand):
                         "(?:tax|vat|gst)[\\s:]*[£$€]?(\\d+\\.\\d{2})",  # Tax keywords
                         "(?:tax|vat|gst)[\\s:]*\\d+%[\\s:]*[£$€]?(\\d+\\.\\d{2})"  # Tax with percentage
                     ],
-                    "offset_from_items": 2  # Usually before total amount
+                    "offset_from_last_item": 2  # Usually before total amount
                 }
             },
             item_patterns=[
