@@ -178,9 +178,6 @@ def transfer_to_gridfs(job_id):
         dict: Transfer results
     """
     from .models import ProcessingJob
-    import gridfs
-    from pymongo import MongoClient
-    from django.conf import settings
     
     try:
         # Get the job
@@ -195,13 +192,6 @@ def transfer_to_gridfs(job_id):
             logger.error(error_msg)
             job.update_status('failed', error_message=error_msg)
             return {'status': 'failed', 'error': error_msg}
-        
-        # Connect to MongoDB
-        client = MongoClient(f"mongodb://{settings.MONGODB_SOCKET}")
-        db = client['receipt_scanner_db']
-        
-        # Create GridFS bucket
-        fs = gridfs.GridFS(db, collection='receipt_files')
         
         # Prepare metadata
         metadata = {

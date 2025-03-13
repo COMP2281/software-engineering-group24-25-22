@@ -16,11 +16,6 @@ class ParserService:
     
     def __init__(self):
         self.base_url = settings.FILE_PARSER_SERVER_URL
-        self.api_key = settings.FILE_PARSER_API_KEY
-        self.headers = {
-            'Authorization': f'ApiKey {self.api_key}',
-            'Accept': 'application/json',
-        }
     
     def _handle_response(self, response):
         """Process the response from the File Parsing Server"""
@@ -51,8 +46,9 @@ class ParserService:
         
         # Prepare headers
         from common.json_utils import MongoJSONEncoder
-        headers = self.headers.copy()
         
+        headers = {}
+
         # Add metadata
         headers['X-Receipt-Metadata'] = json.dumps(metadata, cls=MongoJSONEncoder)
         
@@ -64,33 +60,40 @@ class ParserService:
         response = requests.post(url, files=files, headers=headers)
         return self._handle_response(response)
     
-    def get_job_status(self, job_id):
+    def get_job_status(self, job_id, user_token):
         """Get the status of a processing job"""
         url = f"{self.base_url}/api/parser/status/{job_id}/"
-        response = requests.get(url, headers=self.headers)
+        headers = {}
+
+        if user_token:
+            headers['Authorization'] = f'Bearer {user_token}'
+        else:
+            raise ParserServiceError("User token required to confirm job")
+
+        response = requests.get(url, headers=headers)
         return self._handle_response(response)
     
-    def confirm_job(self, job_id, user_id, corrections=None, user_token=None):
+    def confirm_job(self, job_id, corrections, user_token):
         """Confirm a processed receipt with optional corrections"""
         url = f"{self.base_url}/api/parser/confirm/{job_id}/"
         
         # Use MongoJSONEncoder to handle ObjectId and Decimal
         from common.json_utils import MongoJSONEncoder
         
-        # Prepare request data
-        data = {'user_id': user_id}
-        
         # Add corrections if provided
+        data = {}
         if corrections:
             data['corrections'] = corrections
             
         # Prepare headers
-        headers = self.headers.copy()
+        headers = {}
         headers['Content-Type'] = 'application/json'
         
         # Forward the user's JWT token if provided
         if user_token:
             headers['Authorization'] = f'Bearer {user_token}'
+        else:
+            raise ParserServiceError("User token required to confirm job")
         
         # Convert to JSON-safe format
         data_str = json.dumps(data, cls=MongoJSONEncoder)
@@ -98,37 +101,18 @@ class ParserService:
         response = requests.post(url, data=data_str, headers=headers)
         return self._handle_response(response)
     
-    def discard_job(self, job_id, user_token=None):
+    def discard_job(self, job_id, user_token):
         """Discard a processing job"""
         url = f"{self.base_url}/api/parser/discard/{job_id}/"
         
         # Prepare headers
-        headers = self.headers.copy()
+        headers = {}
         
         # Forward the user's JWT token if provided
         if user_token:
             headers['Authorization'] = f'Bearer {user_token}'
+        else:
+            raise ParserServiceError("User token required to discard job")
         
         response = requests.delete(url, headers=headers)
-        return self._handle_response(response)
-    
-    def edit_job_data(self, job_id, validated_data, user_token=None):
-        """Edit the data extracted from a receipt"""
-        url = f"{self.base_url}/api/parser/edit/{job_id}/"
-        
-        # Use MongoJSONEncoder to handle ObjectId and Decimal
-        from .json_utils import MongoJSONEncoder
-        
-        # Prepare headers
-        headers = self.headers.copy()
-        headers['Content-Type'] = 'application/json'
-        
-        # Forward the user's JWT token if provided
-        if user_token:
-            headers['Authorization'] = f'Bearer {user_token}'
-        
-        # Convert to JSON-safe format
-        data_str = json.dumps(validated_data, cls=MongoJSONEncoder)
-        
-        response = requests.post(url, data=data_str, headers=headers)
         return self._handle_response(response)

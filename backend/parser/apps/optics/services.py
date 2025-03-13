@@ -643,7 +643,7 @@ class TemplateSuite:
             merchant_name: Optional merchant name hint
             
         Returns:
-            Dict with extracted data, confidence, and template info
+            Dict with extracted data, template and image correspondence, and template info
         """
         ocr_text = TemplateSuite.preprocess_ocr_text(ocr_text)
         print(ocr_text)
@@ -672,8 +672,7 @@ class TemplateSuite:
             return {
                 "error": "Failed to parse receipt",
                 "extracted_data": {},
-                "needs_review": True,
-                "confidence": 0,
+                "correspondence": 0,
                 "template_id": None
             }
 
@@ -681,19 +680,17 @@ class TemplateSuite:
         print("EXTRACTED_DATA", extracted_data)
         print("--------------------- EXTRACTED DATA END ---------------------------")
 
-        # Calculate confidence based on fields extracted
+        # Calculate correspondence based on fields extracted
         expected_fields = len(template.field_extractors) if template.field_extractors else 1
-        extracted_fields = sum(1 for k, v in extracted_data.items() if v and k != 'cost_items')
-        confidence = (extracted_fields / expected_fields * 100) if expected_fields > 0 else 0
-        
-        # Determine if user review is needed
-        needs_review = confidence < 80 or not extracted_data['merchant_name'] or not extracted_data['total_amount']
+        extracted_fields = sum(1 for k, v in extracted_data.items() if v and k not in ['cost_items', 'currency', 'currency_symbol'])
+        print(extracted_data.keys())
+        print(expected_fields, extracted_fields)
+        correspondence = ((extracted_fields / expected_fields) * 100) if expected_fields > 0 else 0
 
         return {
             "extracted_data": extracted_data,
             "template_id": template.pk,
-            "confidence": confidence,
-            "needs_review": needs_review
+            "correspondence": correspondence,
         }
         
     @staticmethod

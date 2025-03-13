@@ -62,10 +62,10 @@ try:
         get_filename.short_description = 'Filename'
         
         def get_confidence(self, obj):
-            if not obj.ocr_confidence:
+            if not obj.template_correspondence:
                 return 'N/A'
             
-            confidence = obj.ocr_confidence
+            confidence = obj.template_correspondence
             color = '#F44336'  # Red for low confidence
             if confidence >= 80:
                 color = '#4CAF50'  # Green for high confidence

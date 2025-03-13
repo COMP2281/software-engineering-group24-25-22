@@ -73,8 +73,7 @@ class ReceiptSerializer(ReceiptDocumentSerializer):
     longitude = serializers.FloatField(required=False, allow_null=True)
     location_name = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
-    ocr_confidence = serializers.FloatField(read_only=True)
-    needs_review = serializers.BooleanField(required=False, default=False)
+    template_correspondence = serializers.FloatField(read_only=True)
 
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)

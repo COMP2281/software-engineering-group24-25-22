@@ -1,6 +1,7 @@
 import os
 import logging
 import tempfile
+from typing import Optional
 from PIL import Image
 from pathlib import Path
 from django.utils import timezone
@@ -101,7 +102,7 @@ class OCRProcessor:
         #         self.job.save()
         #     raise OCRProcessorError(f"Processing failed: {str(e)}")
     
-    def _process_image(self, image_path):
+    def _process_image(self, image_path: Optional[str] = None, image_pil: Optional[Image.Image] = None):
         """
         Process an image file using OCR and template matching
         
@@ -124,7 +125,14 @@ class OCRProcessor:
             # 2. Run OCR to extract text
             try:
                 # Open the image using PIL
-                image = Image.open(image_path)
+                image: Image.Image
+
+                if image_path and isinstance(image_path, str):
+                    image = Image.open(image_path)
+                elif image_pil and isinstance(image_pil, Image.Image):
+                    image = image_pil
+                else: 
+                    OCRProcessorError("No image provided")
                 
                 # Run OCR on the image (using pytesseract in a real implementation)
                 ocr_text = pytesseract.image_to_string(image)
@@ -143,14 +151,12 @@ class OCRProcessor:
             
             # Get data from response
             extracted_data = result.get('extracted_data', {})
-            confidence = result.get('confidence', 0) / 100  # Convert percentage to decimal
+            template_correspondence = result.get('correspondence', 0) / 100  # Convert percentage to decimal
             template_id = result.get('template_id')
-            needs_review = result.get('needs_review', True)
             
             # Store results in job if available
             if self.job:
-                self.job.ocr_confidence = confidence
-                self.job.needs_review = needs_review
+                self.job.template_correspondence = template_correspondence
                 if template_id:
                     self.job.template_used = str(template_id)
                 
@@ -166,8 +172,7 @@ class OCRProcessor:
             
             # If we have a job, mark it for review since extraction failed
             if self.job:
-                self.job.needs_review = True
-                self.job.ocr_confidence = 0.0
+                self.job.template_correspondence = 0.0
             
             # Return fallback data
             return {
@@ -188,34 +193,10 @@ class OCRProcessor:
         Returns:
             dict: Extracted data from the receipt
         """
+        from pdf2image import convert_from_path
         logger.info(f"Processing PDF: {pdf_path}")
         
-        # In a real implementation, this would:
-        # 1. Convert PDF to images
-        # 2. Process each page as an image
-        # 3. Combine results if needed
-        
-        # For simulation, we'll return placeholder data with lower confidence
-        
-        # Set confidence level
-        confidence = 0.75
-        
-        # Store confidence if using a job
-        if self.job:
-            self.job.ocr_confidence = confidence
-            self.job.needs_review = True  # Always need review for PDFs
-        
-        # Return simulated extraction results
-        return {
-            'merchant_name': 'PDF Example Corp',
-            'transaction_time': timezone.now().isoformat(),
-            'total_amount': '123.45',
-            'currency': 'USD',
-            'line_items': [
-                {'item_name': 'PDF Item 1', 'quantity': 2, 'unit_price': '50.00', 'total_price': '100.00'},
-                {'item_name': 'PDF Item 2', 'quantity': 1, 'unit_price': '23.45', 'total_price': '23.45'}
-            ]
-        }
+        return self._process_image(image_pil=convert_from_path(pdf_path)[0])
     
     def _process_json(self, json_path):
         """
@@ -234,9 +215,8 @@ class OCRProcessor:
         with open(json_path, 'r') as f:
             data = json.load(f)
         
-        # Set confidence to 1.0 (perfect) for JSON
+        # Set correspondence to 1.0 (perfect) for JSON
         if self.job:
-            self.job.ocr_confidence = 1.0
-            self.job.needs_review = False
+            self.job.template_correspondence = 2.0
         
         return data

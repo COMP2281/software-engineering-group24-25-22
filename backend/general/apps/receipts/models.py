@@ -1,5 +1,4 @@
-from mongoengine import Document, StringField, DateTimeField, FloatField, BooleanField
-from mongoengine import DecimalField, ReferenceField, CASCADE, NULLIFY, EmbeddedDocument, EmbeddedDocumentField, ListField
+from mongoengine import Document, StringField, DateTimeField, FloatField, BooleanField, FileField, DecimalField, ReferenceField, CASCADE, NULLIFY, EmbeddedDocument, EmbeddedDocumentField, ListField
 from django.utils import timezone
 from decimal import Decimal
 
@@ -61,13 +60,11 @@ class Receipt(Document):
     
     # File metadata
     upload_date = DateTimeField(default=timezone.now)
-    original_filename = StringField(max_length=255, required=True)
-    file_type = StringField(max_length=10, required=True)  # PDF, JPG, etc.
-    file_id = StringField(max_length=50, required=True)    # GridFS ID reference
+    file = FileField(required=True, cascade_delete=True)
+    file_ext = StringField(max_length=10, required=True)  # PDF, JPG, etc.
     
     # OCR processing details
-    ocr_confidence = FloatField(default=0.0)  # 0-100
-    needs_review = BooleanField(default=False)
+    template_correspondence = FloatField(default=0.0)  # 0-100
     
     # Location data (optional)
     latitude = FloatField(required=False)

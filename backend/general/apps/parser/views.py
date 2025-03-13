@@ -6,8 +6,8 @@ from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated
 from .services import ParserService, ParserServiceError
-from .serializers import ReceiptUploadSerializer, ReceiptDataSerializer
-from common.json_utils import MongoJSONEncoder
+from .serializers import ReceiptUploadSerializer
+from bson import ObjectId
 
 class ReceiptParseView(APIView):
     """
@@ -29,7 +29,6 @@ class ReceiptParseView(APIView):
         
         # Prepare metadata for the File Parsing Server
         metadata = {
-            'user_id': request.user.id,
             'original_filename': file_obj.name,
             'file_size': file_obj.size,
             'content_type': file_obj.content_type,
@@ -70,9 +69,16 @@ class JobStatusView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request, job_id):
+        auth_header = request.headers.get('Authorization')
+        user_token = None
+        
+        if auth_header and auth_header.startswith('Bearer '):
+            user_token = auth_header.split(' ')[1]
+
         try:
+
             parser_service = ParserService()
-            result = parser_service.get_job_status(job_id)
+            result = parser_service.get_job_status(job_id, user_token)
             return Response(result)
         except ParserServiceError as e:
             return Response(
@@ -90,6 +96,7 @@ class ConfirmJobView(APIView):
         try:
             # Get corrections from request if any
             corrections = request.data.get('corrections', None)
+            descriptions = request.data.get('descriptions', None)
             
             # Get user's JWT token
             auth_header = request.headers.get('Authorization')
@@ -101,13 +108,12 @@ class ConfirmJobView(APIView):
             parser_service = ParserService()
             result = parser_service.confirm_job(
                 job_id, 
-                request.user.id, 
-                corrections=corrections,
-                user_token=user_token
+                corrections,
+                user_token
             )
             
             # If confirmation successful, create a Receipt record in our database
-            from apps.receipts.models import Receipt, CostItem
+            from apps.receipts.models import Receipt
             from datetime import datetime
             from decimal import Decimal
             from django.utils import timezone
@@ -123,13 +129,24 @@ class ConfirmJobView(APIView):
             # Extract data from the parser response
             extracted_data = result.get('extracted_data', {})
             user_corrections = result.get('user_corrections', {})
-            gridfs_id = result.get('gridfs_id')
+
+            print(json.dumps(result, indent=3))
+
+            gridfs_id = result.get('gridfs_id', False)
+            gridfs_ext = result.get('gridfs_ext', False)
+
+            print("gridfs_ext", gridfs_ext)
+
+            if not gridfs_id or not gridfs_ext: 
+                raise ParserServiceError("No file data found in response", status_code=500)
 
             print("extracted_data", extracted_data)
             print("user_corrections", user_corrections)
             
             # Combine extracted data with user corrections to get final data
             final_data = {**extracted_data}
+            if descriptions:
+                final_data.update(descriptions)
             if user_corrections:
                 final_data.update(user_corrections)
             
@@ -155,7 +172,7 @@ class ConfirmJobView(APIView):
                     transaction_time = timezone.now()
             else:
                 transaction_time = timezone.now()
-            
+
             # Convert decimal strings to Decimal objects
             total_amount = Decimal(str(final_data.get('total_amount', '0.00') or '0.00'))
             tax_amount = Decimal(str(final_data.get('tax_amount', '0.00') or '0.00'))
@@ -174,13 +191,15 @@ class ConfirmJobView(APIView):
                 subtotal_amount=subtotal_amount,
                 currency=final_data.get('currency', 'GBP'),
                 employee=request.user,
-                original_filename=final_data.get('original_filename', 'receipt.jpg'),
-                file_type=final_data.get('file_type', 'image/jpeg'),
-                file_id=str(gridfs_id) if gridfs_id else '',
-                ocr_confidence=final_data.get('ocr_confidence', 0.0),
-                needs_review=final_data.get('needs_review', False),
+                status="pending",
+                upload_date=timezone.now(),
+                file_ext=gridfs_ext,
+                template_correspondence=final_data.get('template_correspondence', 0.0),
                 updated_at=timezone.now()
             )
+
+            print("gridfs_ext", gridfs_ext)
+            receipt.file.grid_id = ObjectId(gridfs_id)
 
             # Use whichever has items
             items_to_process = final_data.get("cost_items", [])           
@@ -234,44 +253,6 @@ class DiscardJobView(APIView):
             parser_service = ParserService()
             parser_service.discard_job(job_id, user_token=user_token)
             return Response({'success': True})
-        except ParserServiceError as e:
-            return Response(
-                {'error': str(e), 'detail': e.detail}, 
-                status=e.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-class EditJobDataView(APIView):
-    """
-    API endpoint for editing processed receipt data
-    """
-    parser_classes = (JSONParser,)
-    permission_classes = [IsAuthenticated]
-    
-    def post(self, request, job_id):
-        # Validate input data
-        serializer = ReceiptDataSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            # Get user's JWT token
-            auth_header = request.headers.get('Authorization')
-            user_token = None
-            
-            if auth_header and auth_header.startswith('Bearer '):
-                user_token = auth_header.split(' ')[1]
-                
-            parser_service = ParserService()
-            # Convert Decimal values to floats to avoid JSON serialization issues
-            from .json_utils import MongoJSONEncoder
-            import json
-            
-            # Convert to JSON string and back to handle all non-standard types
-            data_json = json.dumps(serializer.validated_data, cls=MongoJSONEncoder)
-            serializable_data = json.loads(data_json)
-            
-            result = parser_service.edit_job_data(job_id, serializable_data, user_token=user_token)
-            return Response(result)
         except ParserServiceError as e:
             return Response(
                 {'error': str(e), 'detail': e.detail}, 

@@ -4,7 +4,6 @@ from .views import (
     JobStatusView,
     ConfirmJobView,
     DiscardJobView,
-    EditJobDataView
 )
 
 app_name = 'jobs'
@@ -14,5 +13,4 @@ urlpatterns = [
     path('status/<str:id>/', JobStatusView.as_view(), name='job-status'),
     path('confirm/<str:id>/', ConfirmJobView.as_view(), name='confirm-job'),
     path('discard/<str:id>/', DiscardJobView.as_view(), name='discard-job'),
-    path('edit/<str:id>/', EditJobDataView.as_view(), name='edit-job-data'),
 ]

@@ -29,7 +29,7 @@ class ProcessingJob(Document):
     status = StringField(max_length=20, choices=STATUS_CHOICES, default='pending')
     original_filename = StringField(max_length=255)
     file_type = StringField(max_length=50)
-    uploaded_file = FileField(default=None)
+    uploaded_file = FileField(default=None, cascade_delete=False,)
     
     # Celery task tracking
     task_id = StringField(max_length=50, required=False,
@@ -42,8 +42,7 @@ class ProcessingJob(Document):
     extracted_data = DictField(required=False, help_text="Original data extracted by the OCR system")
     user_corrections = DictField(required=False, help_text="Corrections made by the user")
     error_message = StringField(required=False)
-    ocr_confidence = FloatField(default=0.0)
-    needs_review = BooleanField(default=False)
+    template_correspondence = FloatField(default=0.0)
     template_used = StringField(max_length=50, required=False,
                              help_text="ID of the template used for parsing")
     
