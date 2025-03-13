@@ -354,7 +354,7 @@ class ConfirmJobView(APIView):
         job.metadata['confirmed_at'] = timezone.now().isoformat()
         job.update_status('confirmed')
 
-        print(job.uploaded_file.grid_id)
+        logger.info(f"Job {job.id} confirmed successfully with GridFS ID: {job.uploaded_file.grid_id}")
         
         # Return the final receipt data
         return Response({
