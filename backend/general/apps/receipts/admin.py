@@ -19,12 +19,10 @@ class CostItemProxy(models.Model):
         verbose_name_plural = 'Cost Items'
         app_label = 'receipts'
 
-# Admin classes for MongoDB documents
-from apps.accounts.admin import MongoDBAdmin
 
 class ReceiptAdmin(MongoDBAdmin):
     mongo_model = Receipt
-    list_display = ('get_id', 'get_merchant', 'get_date', 'get_amount', 'get_status', 'get_employee', 'get_approver')
+    list_display = ('get_id', 'get_merchant', 'get_date', 'get_amount', 'get_status', 'get_employee', 'get_approver', 'get_template_used')
     search_fields = ('merchant_name', 'reference_number')
     # Remove list_filter for now as it causes issues with proxy models
     list_filter = ()
@@ -61,6 +59,11 @@ class ReceiptAdmin(MongoDBAdmin):
     def get_approver(self, obj):
         return obj.approver
     get_approver.short_description = 'Approver'
+
+    @MongoDBAdmin.reference_field(app='parser', model='receipttemplateproxy')
+    def get_template_used(self, obj):
+        return obj.template_used
+    get_template_used.short_description = 'Template Used'
 
 class CostItemAdmin(MongoDBAdmin):
     mongo_model = CostItem

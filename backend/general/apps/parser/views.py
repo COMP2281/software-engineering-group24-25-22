@@ -207,7 +207,8 @@ class ConfirmJobView(APIView):
                 status="pending",
                 upload_date=timezone.now(),
                 file_ext=gridfs_ext,
-                template_correspondence=final_data.get('template_correspondence', 0.0),
+                template_correspondence=result.get('template_correspondence', 0.0),
+                template_used=result.get('template_used', None),
                 updated_at=timezone.now()
             )
 

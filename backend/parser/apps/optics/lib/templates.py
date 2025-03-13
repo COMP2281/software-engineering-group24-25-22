@@ -10,21 +10,21 @@ logger = logging.getLogger(__name__)
 
 class OCRTemplateCostList(TypedDict):
     quantity: str
-    item: str
-    total: str
+    item_name: str
+    total_price: str
 
 
 class OCRTemplateCorrection(TypedDict):
     merchant_name: str
-    date: str
-    total_amount: str
-    address: str
-    reference: str
-    cost_items: List[OCRTemplateCostList]
-    description: str
-    tax: str
+    transaction_time: str
+    merchant_address: str
+    reference_number: str
+    tax_amount: str
     category: str
+    description: str
+    total_amount: str
     subtotal_amount: str
+    cost_items: List[OCRTemplateCostList]
 
 
 class FieldExtractor(TypedDict):
@@ -182,6 +182,7 @@ class OCRTemplate:
         """
 
         self.lines = ocr_text.strip().split('\n')
+        print(self.lines)
         self.corrected_values = corrected_values
 
         self.merchant_name = self._find_merchant_name()
@@ -242,11 +243,11 @@ class OCRTemplate:
         Locate line items in the receipt and extract their information.
         Returns: (start_line, end_line, extracted_items)
         """
-        if not self.corrected_values or 'cost_list' not in self.corrected_values:
+        if not self.corrected_values or 'cost_items' not in self.corrected_values:
             return -1, -1, []
 
-        cost_list = self.corrected_values['cost_list']
-        if not cost_list:
+        cost_items = self.corrected_values['cost_items']
+        if not cost_items:
             return -1, -1, []
 
         # Search for line items based on the corrected data
@@ -259,33 +260,39 @@ class OCRTemplate:
         # corrected item isn't actually the first one in the receipt
         earliest_start = None
         earliest_item: OCRTemplateCostList
+
+        print('++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
+        print("cost_items", cost_items)
+        print('++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
         
-        for item in cost_list:
-            item_name = item['item']
+        for item in cost_items:
+            item_name = item['item_name']
             for i, line in enumerate(self.lines):
                 if item_name in line:
                     if earliest_start is None or i < earliest_start:
                         earliest_start = i
                         earliest_item = item
                     break
+
+        print(earliest_start)
         
         # Use the earliest found item as our starting point
         if earliest_start is not None:
             start_line = earliest_start
-            logger.info(f"Found earliest item '{earliest_item['item']}' at line {start_line}")
+            logger.info(f"Found earliest item '{earliest_item['item_name']}' at line {start_line}")
         else:
             logger.warning("Could not find any corrected items in OCR text")
             return -1, -1, []
 
         # Now that we have the correct starting point, find all items
         # This will include items that might appear before others in the user's correction list
-        for item in cost_list:
+        for item in cost_items:
             item_found = False
             # Start searching from the earliest start line we found
             for i in range(start_line, len(self.lines)):
                 # Check for exact match or if the item name is contained within the line
                 # This helps with multiline items or items with slight OCR differences
-                if item['item'] in self.lines[i]:
+                if item['item_name'] in self.lines[i]:
                     items_found.append({
                         'line': i,
                         'content': self.lines[i],
@@ -301,7 +308,7 @@ class OCRTemplate:
                 # This helps with OCR errors or slight formatting differences
                 for i in range(start_line, len(self.lines)):
                     # Check if at least 60% of the item name words appear in the line
-                    item_words = set(item['item'].lower().split())
+                    item_words = set(item['item_name'].lower().split())
                     line_words = set(self.lines[i].lower().split())
                     common_words = item_words.intersection(line_words)
                     
@@ -322,7 +329,7 @@ class OCRTemplate:
             logger.warning("Could not locate any corrected items in OCR text")
             return -1, -1, []
             
-        logger.info(f"Found {len(items_found)}/{len(cost_list)} corrected items, from line {start_line} to {end_line}")
+        logger.info(f"Found {len(items_found)}/{len(cost_items)} corrected items, from line {start_line} to {end_line}")
         print("items_found", items_found)
         return start_line, end_line, items_found
 
@@ -401,11 +408,14 @@ class OCRTemplate:
             groups = pattern_def["groups"]
             score = 0
             matches = []
-            
+
+            print("item_lines", item_lines)
             # Test this pattern against each line
             for item in item_lines:
                 line = item['content']
                 match = re.search(pattern, line)
+
+                print("item-item", item['item'])
                 
                 if match:
                     # Verify the match returns expected values
@@ -415,6 +425,8 @@ class OCRTemplate:
                             expected_values[field] = match.group(group_idx)
                         elif field == "quantity":
                             expected_values[field] = "1"  # Default quantity
+
+                    print(expected_values)
                     
                     # Check if extracted data matches corrected values
                     correct_match = True
@@ -424,11 +436,11 @@ class OCRTemplate:
                     
                     if "item_name" in expected_values:
                         # Use fuzzy matching for item name because exact match might be too strict
-                        if item['item']["item"] not in expected_values["item_name"] and expected_values["item_name"] not in item['item']["item"]:
+                        if item['item']["item_name"] not in expected_values["item_name"] and expected_values["item_name"] not in item['item']["item_name"]:
                             correct_match = False
                     
                     if "total_price" in expected_values:
-                        if expected_values["total_price"] != item['item']["total"]:
+                        if expected_values["total_price"] != item['item']["total_price"]:
                             correct_match = False
                     
                     if correct_match:
@@ -466,8 +478,8 @@ class OCRTemplate:
         item = item_lines[0]
         line = item['content']
         quantity = item['item'].get('quantity', '1')
-        item_name = item['item']['item']
-        price = item['item']['total']
+        item_name = item['item']['item_name']
+        price = item['item']['total_price']
         
         # Try to create a more generic pattern based on the structure
         # Look for numbers and text blocks
@@ -508,12 +520,12 @@ class OCRTemplate:
         field_extractors = {}
         field_mapping = {
             'merchant_name': 'merchant_name',
-            'date': 'transaction_time',
-            'address': 'merchant_address',
-            'reference': 'reference_number',
+            'transaction_time': 'transaction_time',
+            'merchant_address': 'merchant_address',
+            'reference_number': 'reference_number',
             'total_amount': 'total_amount',
-            'tax': 'tax_amount',
-            'subtotal_amount': 'subtotal_amount'
+            'subtotal_amount': 'subtotal_amount',
+            'tax_amount': 'tax_amount',
         }
         
         # Skip if no corrections provided
@@ -635,6 +647,7 @@ class OCRTemplate:
         """
         Create a template based on user corrections.
         """
+        print("------------0000000000000000000000000000000000000000000000000000000000000000000000000000000")
         # Find line items section
         start_line, end_line, items = self._find_line_items()
 
@@ -913,7 +926,7 @@ class OCRTemplate:
                             # Don't treat very short lines as continuations (likely OCR artifacts)
                             if not is_skip_line and len(line_text) > 2:
                                 # Append to the item name field
-                                item_name_field = 'item_name' if 'item_name' in current_item else 'item'
+                                item_name_field = 'item_name' if 'item_name' in current_item else 'item_name'
                                 if item_name_field in current_item:
                                     current_item[item_name_field] += ' ' + line_text
                                     end_line = i  # Update end_line to include this continuation

@@ -12,6 +12,7 @@ from typing import Dict, Any
 from .utils import temp_file_path
 
 from .models import ProcessingJob
+from common.models.templates import ReceiptTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -333,6 +334,14 @@ class ConfirmJobView(APIView):
             
             # Process template improvements with the corrections
             self.process_template_improvements(job, corrections)
+        else:
+            # No corrections. It was 100% accurate.
+            template = ReceiptTemplate.objects(id=job.template_used).first()
+            if template.success_rate == 0:
+                template.success_rate = 100
+            else:
+                template.success_rate = ((template.success_rate/100 * 0.7) + (0.3)) * 100
+            template.save()
         
         # Transfer to permanent storage and create records
         from .tasks import transfer_to_gridfs
@@ -355,12 +364,14 @@ class ConfirmJobView(APIView):
         job.update_status('confirmed')
 
         logger.info(f"Job {job.id} confirmed successfully with GridFS ID: {job.uploaded_file.grid_id}")
-        
+
         # Return the final receipt data
         return Response({
             'id': str(job.id),
             'gridfs_id': transfer_result.get('gridfs_id', None),
             'gridfs_ext': job.metadata.get('extension_filename', None),
+            "template_correspondence": job.template_correspondence,
+            "template_used": job.template_used,
             'extracted_data': job.extracted_data,
             'user_corrections': job.user_corrections
         })
