@@ -38,14 +38,19 @@ class ReceiptDocumentSerializer(DocumentSerializer):
         return data
 
 # Model Serializers 
-class CostItemSerializer(ReceiptDocumentSerializer):
+class CostItemSerializer(serializers.Serializer):
     item_name = serializers.CharField()
     unit_price = serializers.DecimalField(max_digits=10, decimal_places=2)
     quantity = serializers.DecimalField(max_digits=10, decimal_places=2)
     total_price = serializers.DecimalField(max_digits=10, decimal_places=2)
     
-    class Meta:
-        model = CostItem
+    def to_representation(self, instance):
+        return {
+            'item_name': instance.item_name,
+            'unit_price': str(instance.unit_price),
+            'quantity': str(instance.quantity),
+            'total_price': str(instance.total_price)
+        }
 
 class ReceiptSerializer(ReceiptDocumentSerializer):
     id = serializers.CharField(read_only=True)
@@ -147,4 +152,12 @@ class ReceiptSerializer(ReceiptDocumentSerializer):
         # Find all cost items for this receipt
         data['file'] = base64.b64encode(instance.file.read()).decode('utf-8')
         data['file_ext'] = instance.file_ext
+
+        # Properly serialize the embedded cost_items document list
+        if hasattr(instance, 'cost_items') and instance.cost_items:
+            serializer = CostItemSerializer(instance.cost_items, many=True)
+            data['cost_items'] = serializer.data
+        else:
+            data['cost_items'] = []
+            
         return data

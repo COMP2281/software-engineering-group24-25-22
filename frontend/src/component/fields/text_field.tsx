@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import TextField from '@mui/material/TextField';
 
 interface InputTextFieldProps {
-    itemID: number;
+    itemID: string;
     field: string;
     initialValue?: string;
     setFieldValues: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>;
@@ -10,27 +10,34 @@ interface InputTextFieldProps {
 }
 
 export function InputTextField({ itemID, field, initialValue = '', setFieldValues, edit }: InputTextFieldProps) {
-    const [value, setValue] = useState(initialValue);
+	let formattedInitialValue = initialValue;
+	if (field === 'cost_items') {
+		formattedInitialValue = JSON.stringify(initialValue, null, 2);
+	}
+
+    const [value, setValue] = useState(formattedInitialValue);
     const [error, setError] = useState(false);
     const [rows, setRows] = useState(3);
 
+    // Update value when initialValue changes (important for API loaded data)
     useEffect(() => {
-        setValue(initialValue);
-    }, [initialValue]);
-
-    useEffect(() => {
-        setError(value.trim() === '');
-        setFieldValues(prevValues => ({
-            ...prevValues,
-            [field]: value
-        }));
-    }, [value, field, setFieldValues]);
+        let newValue = initialValue;
+        if (field === 'cost_items') {
+            newValue = JSON.stringify(initialValue, null, 2);
+        }
+        setValue(newValue);
+    }, [initialValue, field]);
 
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        
         const inputValue = event.target.value;
         setValue(inputValue);
         setError(inputValue.trim() === '');
+
+        // Update the parent component's state with the new value
+        setFieldValues(prev => ({
+            ...prev,
+            [field]: inputValue
+        }));
 
         const lineBreaks = inputValue.split('\n').length;
         setRows(Math.max(3, lineBreaks));
@@ -49,6 +56,9 @@ export function InputTextField({ itemID, field, initialValue = '', setFieldValue
                 multiline
                 rows={rows}
                 disabled={!edit}
+                InputProps={{
+                    readOnly: !edit
+                }}
             />
         </div>
     );

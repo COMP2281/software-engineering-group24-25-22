@@ -1,13 +1,14 @@
 import { PendingItem } from '../types/receipt';
 
 export const displayToProperty: { [key: string]: keyof PendingItem } = {
-    'Merchant Name': 'merchant',
-    'Time': 'time',
-    'Address': 'address',
-    'Ref': 'ref',
-    'Total Cost': 'cost',
+    'Merchant Name': 'merchant_name',
+    'Time': 'transaction_time',
+    'Address': 'merchant_address',
+    'Ref': 'reference_number',
+	'Cost List': 'cost_items',
+    'Total Cost': 'total_amount',
     'Description (Manual)': 'description',
-    'Tax': 'tax',
+    'Tax': 'tax_amount',
     'Category (Manual)': 'category'
 };
 

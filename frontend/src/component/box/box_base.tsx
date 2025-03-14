@@ -13,11 +13,12 @@ export function BoxBase({ items, buttonOption }: BoxBaseProps) {
     const navigate = useNavigate();
 
     const handleEdit = (id: number) => {
-        navigate(`/dashboard/${id}`);
+		console.log(id)
+        navigate(`/upload/${id}`);
     };
 
     const handleView = (id: number) => {
-        navigate(`/dashboard/view/${id}`);
+        navigate(`/dashboard/${id}`);
     };
 
     return (

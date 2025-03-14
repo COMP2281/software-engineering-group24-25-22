@@ -1,91 +1,97 @@
-import React from 'react'
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LoginInputFields } from '../component/fields/login_input_fields';
 import { LoginButton } from '../component/buttons/login_button';
-
-const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
-    let accessToken = localStorage.getItem('accessToken');
-
-    // Set up headers with authorization
-    let headers: HeadersInit = {
-        'Content-Type': 'application/json',
-        ...options.headers,
-        'Authorization': `Bearer ${accessToken}`
-    };
-
-    const makeRequest = async (): Promise<Response> => {
-        return fetch(url, { ...options, headers });
-    };
-
-    try {
-        let response = await makeRequest();
-
-        // Handle 401 Unauthorized - token may have expired
-        if (response.status === 401) {
-            console.warn("Access token expired. Attempting refresh...");
-
-            // Attempt to refresh token
-            const newToken = await refreshToken();
-            if (newToken) {
-                localStorage.setItem('accessToken', newToken);
-                headers = {
-                    ...headers,
-                    'Authorization': `Bearer ${newToken}`
-                };
-
-                // Retry request with new token
-                response = await makeRequest();
-            } else {
-                // Redirect to login if refresh failed
-                redirectToLogin();
-                throw new Error('Authentication failed');
-            }
-        }
-
-        return response;
-    } catch (error) {
-        console.error('API request failed:', error);
-        throw error;
-    }
-};
-
-// Mock refreshToken function (should be implemented)
-const refreshToken = async (): Promise<string | null> => {
-    try {
-        const response = await fetch('auth/refresh/', {
-            method: 'POST',
-            credentials: 'include'
-        });
-
-        if (!response.ok) {
-            console.error("Failed to refresh token");
-            return null;
-        }
-
-        const data = await response.json();
-        return data.accessToken || null;
-    } catch (error) {
-        console.error("Error refreshing token:", error);
-        return null;
-    }
-};
-
-const redirectToLogin = () => {
-    window.location.hash = 'login'
-}
+import { login } from '../utils/requests';
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
 
 export function Login() {
+    const navigate = useNavigate();
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | undefined>();
+    const [showSuccess, setShowSuccess] = useState(false);
+    
+    const handleInputChange = (field: string, value: string) => {
+        if (field === 'email') {
+            setEmail(value);
+        } else if (field === 'password') {
+            setPassword(value);
+        }
+        
+        // Clear error when user types
+        if (error) setError(undefined);
+    };
+    
+    const handleLogin = async () => {
+        if (!email || !password) {
+            setError('Email and password are required');
+            return;
+        }
+        
+        setIsLoading(true);
+        setError(undefined);
+        
+        try {
+            const result = await login(email, password);
+            console.log("Login result:", result); // For debugging
+            
+            if (result.success) {
+                setShowSuccess(true);
+                setTimeout(() => {
+                    navigate('/dashboard');
+                }, 1000);
+            } else {
+                // Parse error messages if they're in a specific format
+                let errorMsg = result.error;
+                if (typeof errorMsg === 'string') {
+                    // Extract the actual error message if it's wrapped
+                    const match = errorMsg.match(/ErrorDetail\(string='([^']+)'/);
+                    if (match && match[1]) {
+                        errorMsg = match[1];
+                    }
+                }
+                setError(errorMsg);
+            }
+        } catch (err) {
+            setError('An unexpected error occurred. Please try again.');
+            console.error('Login error:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
     return (
         <div className="w-full h-screen flex items-center justify-center bg-gray-100">
             <div className="bg-white p-10 rounded-2xl shadow-lg w-[60rem] flex flex-col items-center">
                 <h2 className="text-3xl font-semibold mb-6">Login</h2>
                 <div className="w-full">
-                    <LoginInputFields />
+                    <LoginInputFields 
+                        onInputChange={handleInputChange}
+                        email={email}
+                        password={password}
+                        error={error}
+                    />
                 </div>
                 <div className="w-60 mt-4 flex items-center justify-center">
-                    <LoginButton/>
+                    <LoginButton 
+                        onLogin={handleLogin}
+                        isLoading={isLoading}
+                        disabled={!email || !password}
+                    />
                 </div>
-                
             </div>
+            
+            <Snackbar 
+                open={showSuccess} 
+                autoHideDuration={3000} 
+                onClose={() => setShowSuccess(false)}
+                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+            >
+                <Alert severity="success">Login successful! Redirecting...</Alert>
+            </Snackbar>
         </div>
     );
 }

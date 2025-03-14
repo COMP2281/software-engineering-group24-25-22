@@ -1,29 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 
-import { PendingUploadBox } from '../component/box/pending_upload_box.tsx';
-import { PreviosUploadBox } from '../component/box/previous_upload_box.tsx';
-import { ImageUpload } from '../component/image_upload.tsx'
-import { ConvertToCSV } from '../component/buttons/convert_to_csv.tsx';
+import { FieldTable } from '../component/fields/field_table';
+import { ImageField } from '../component/fields/image_field';
+
 
 export function Upload() {
+    const [fieldValues, setFieldValues] = useState<{ [key: string]: string }>({});
+
+    const totalFields = 8;
+    const filledFields = Object.values(fieldValues).filter(value => value.trim() !== "").length;
+    const progress = (filledFields / totalFields) * 100;
+
     return (
-        <div className="flex flex-col lg:flex-row lg:h-screen justify-center items-center p-8">
-            <div className="lg:w-1/2 flex justify-center items-center h-full">
-                    
-                <div className="w-fill flex flex-col gap-y-4">
-                    <ImageUpload />
-                    <PendingUploadBox />
-                    
-                </div>
+        <div className="flex flex-col lg:flex-row lg:h-screen  w-full ">
+            <div className='lg:w-1/3 w-full p-4 h-full '>
+                <ImageField progress={progress} edit={true} />
             </div>
-
-            <div className="lg:h-full lg:w-1 bg-gray-700 w-full h-1 my-4 lg:my-0 lg:mx-4"></div>
-
-            <div className="lg:w-1/2 w-full flex justify-center items-center py-4 h-full">
-                <div className="w-11/12 flex flex-col gap-y-4 items-center">
-                    <ConvertToCSV />
-                    <PreviosUploadBox />
-                </div>
+            <div className='lg:w-2/3 w-full p-4'>
+                <FieldTable edit={true}/>
             </div>
         </div>
     );
