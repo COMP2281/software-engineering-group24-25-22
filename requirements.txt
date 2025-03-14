@@ -36,7 +36,9 @@ pytesseract==0.3.13
 python-dateutil==2.9.0.post0
 python-snappy==0.7.3
 pytz==2025.1
+RapidFuzz==3.12.2
 redis==5.2.1
+regex==2024.11.6
 requests==2.32.3
 setuptools==75.8.2
 six==1.17.0
