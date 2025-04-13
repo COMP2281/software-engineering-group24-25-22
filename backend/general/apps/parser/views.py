@@ -152,20 +152,14 @@ class ConfirmJobView(APIView):
             extracted_data = result.get("extracted_data", {})
             user_corrections = result.get("user_corrections", {})
 
-            print(json.dumps(result, indent=3))
-
             gridfs_id = result.get("gridfs_id", False)
             gridfs_ext = result.get("gridfs_ext", False)
-
-            print("gridfs_ext", gridfs_ext)
 
             if not gridfs_id or not gridfs_ext:
                 raise ParserServiceError(
                     "No file data found in response", status_code=500
                 )
 
-            print("extracted_data", extracted_data)
-            print("user_corrections", user_corrections)
 
             # Combine extracted data with user corrections to get final data
             final_data = {**extracted_data}
@@ -230,12 +224,10 @@ class ConfirmJobView(APIView):
                 updated_at=timezone.now(),
             )
 
-            print("gridfs_ext", gridfs_ext)
             receipt.file.grid_id = ObjectId(gridfs_id)
 
             # Use whichever has items
             items_to_process = final_data.get("cost_items", [])
-            print(items_to_process)
             # Create embedded cost items
             for item in items_to_process:
                 # Handle both API and internal format field names

@@ -53,9 +53,6 @@ def validate_field_extractors(value):
         raise ValidationError("field_extractors must be a dictionary")
 
     for field_name, extractor in value.items():
-        print(field_name)
-        print(extractor)
-        print(" ")
         # Check basic structure
         if not isinstance(extractor, dict):
             raise ValidationError(f"Extractor for '{field_name}' must be a dictionary")
@@ -174,8 +171,6 @@ def validate_item_patterns(value):
             raise ValidationError(
                 f"'groups' in item pattern at index {i} must be a dictionary"
             )
-
-        print(groups)
 
         for field, group_idx in groups.items():
             if not isinstance(field, str):

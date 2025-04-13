@@ -136,8 +136,6 @@ class ReceiptSerializer(ReceiptDocumentSerializer):
             required_fields = ["file", "file_ext", "upload_date"]
             missing_fields = [field for field in required_fields if not data.get(field)]
 
-            print(data)
-            print(missing_fields)
             if missing_fields:
                 raise serializers.ValidationError(
                     {

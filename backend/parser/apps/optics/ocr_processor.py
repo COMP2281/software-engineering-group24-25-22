@@ -64,9 +64,6 @@ class OCRProcessor:
 
         # Store results in job if available
         if self.job:
-            print("------------------------- PROCESSED DATA -----------------------")
-            print(json.dumps(result))
-            print("------------------------- PROCESSED DATA END -------------------")
             self.job.extracted_data = result
             self.job.save()
 

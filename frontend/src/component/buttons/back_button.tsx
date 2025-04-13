@@ -6,7 +6,7 @@ export function BackButton() {
     const navigate = useNavigate();
 
     const handleClick = () => {
-        navigate('/upload');
+        navigate('/dashboard');
     };
 
     return (

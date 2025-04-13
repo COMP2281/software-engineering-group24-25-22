@@ -178,12 +178,9 @@ class OCRTemplate:
         """
 
         self.lines = ocr_text.strip().split("\n")
-        print(self.lines)
         self.corrected_values = corrected_values
 
         self.merchant_name = self._find_merchant_name()
-
-        print("merchant_name", self.merchant_name)
 
         # removed detect_currency() call
 
@@ -258,14 +255,6 @@ class OCRTemplate:
         earliest_start = None
         earliest_item: OCRTemplateCostList
 
-        print(
-            "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-        )
-        print("cost_items", cost_items)
-        print(
-            "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-        )
-
         for item in cost_items:
             item_name = item["item_name"]
             for i, line in enumerate(self.lines):
@@ -274,8 +263,6 @@ class OCRTemplate:
                         earliest_start = i
                         earliest_item = item
                     break
-
-        print(earliest_start)
 
         # Use the earliest found item as our starting point
         if earliest_start is not None:
@@ -331,7 +318,6 @@ class OCRTemplate:
         logger.info(
             f"Found {len(items_found)}/{len(cost_items)} corrected items, from line {start_line} to {end_line}"
         )
-        print("items_found", items_found)
         return start_line, end_line, items_found
 
     def _create_line_item_regex(
@@ -419,13 +405,10 @@ class OCRTemplate:
             score = 0
             matches = []
 
-            print("item_lines", item_lines)
             # Test this pattern against each line
             for item in item_lines:
                 line = item["content"]
                 match = re.search(pattern, line)
-
-                print("item-item", item["item"])
 
                 if match:
                     # Verify the match returns expected values
@@ -435,8 +418,6 @@ class OCRTemplate:
                             expected_values[field] = match.group(group_idx)
                         elif field == "quantity":
                             expected_values[field] = "1"  # Default quantity
-
-                    print(expected_values)
 
                     # Check if extracted data matches corrected values
                     correct_match = True
@@ -608,15 +589,9 @@ class OCRTemplate:
                 # Useful for multi-line fields like address
                 reverse_score = fuzz.ratio(line.lower(), corrected_value.lower())
 
-                print(
-                    f"{system_field} - line {i} - {corrected_value} >> max: {max_score} and reverse: {reverse_score}"
-                )
-                print(f"\t{line}")
-
                 # If this line matches better than previous ones
                 if max_score > best_score and max_score > 70:
                     best_score = max_score
-                    print("—————————————————————", best_score)
                     if end_line is not None and i > end_line:
                         best_offset = i - end_line
                         best_line = -1
@@ -635,13 +610,10 @@ class OCRTemplate:
                     best_line = i
                     best_offset = None
 
-            print(f"best_line: {best_line}. best_offset: {best_offset}")
-
             # If we found a matching line
             if best_line >= 0 or best_offset is not None:
                 # Try each pattern from FIELD_PATTERNS to find best performing one
                 patterns = self.FIELD_PATTERNS.get(system_field, [])
-                print("patterns", patterns)
                 target_line: int = 0
                 if best_offset is None:
                     target_line = best_line
@@ -695,9 +667,6 @@ class OCRTemplate:
         """
         Create a template based on user corrections.
         """
-        print(
-            "------------0000000000000000000000000000000000000000000000000000000000000000000000000000000"
-        )
         # Find line items section
         start_line, end_line, items = self._find_line_items()
 
@@ -725,18 +694,8 @@ class OCRTemplate:
         if self.template_data is None:
             return {"error": "Template data not available"}
 
-        print(
-            "\ntemplate_data ======================================================================="
-        )
-        print(json.dumps(self.template_data, indent=3))
-        print(
-            "=====================================================================================\n"
-        )
-
         # Convert our simplified field_extractors to the model format
         for field, extractor in self.template_data["field_extractors"].items():
-            print(field)
-            print(json.dumps(extractor), "\n")
             field_extractors[field] = {
                 "expected_present": extractor.get("expected_present", True),
                 "patterns": [extractor["regex"]],
@@ -796,24 +755,12 @@ class OCRTemplate:
         Returns:
             Dictionary of extracted fields
         """
-        print(
-            "\n====================================================================================="
-        )
-        print("\nEXTRACTING")
-        print(
-            "\n=====================================================================================\n"
-        )
         # First detect the currency before extraction
         self._detect_currency()
-
-        print("currency code:", self.currency_code)
-        print("currency symbol", self.currency_symbol)
 
         extracted_data = {}
         field_extractors = template_model_data.get("field_extractors", {})
         has_line_items = template_model_data.get("has_line_items", True)
-
-        print("I'm here (extract)")
 
         # First pass: extract fields with absolute line positions
         for field, extractor in field_extractors.items():
@@ -938,7 +885,6 @@ class OCRTemplate:
                 current_item = None
                 i = start_line
 
-                print("LINE ITEMS")
                 while i < len(self.lines):
                     matched = False
                     # Try to match this line against our item patterns
@@ -966,19 +912,12 @@ class OCRTemplate:
                                         item_data[field] = (
                                             "1"  # Default quantity if not in pattern
                                         )
-                                print(
-                                    "---------------------- ITEM_DATA --------------------"
-                                )
                                 if set(["total_price", "quantity"]).issubset(
                                     pattern_def["groups"].keys()
                                 ):
                                     item_data["unit_price"] = (
                                         f"{(float(item_data['total_price']) / float(item_data['quantity'])):.2f}"
                                     )
-                                print(json.dumps(item_data))
-                                print(
-                                    "---------------------- ITEM_DATA END --------------------"
-                                )
                                 if item_data:
                                     # Found a new regular item
                                     line_items.append(item_data)
@@ -1041,13 +980,8 @@ class OCRTemplate:
                 if line_items:
                     extracted_data["_last_item_line"] = end_line
 
-        print("LAST_ITEM_LINE")
-        print(json.dumps(extracted_data["_last_item_line"]))
-
         # Second pass: extract fields with relative positions from line items
         if "_last_item_line" in extracted_data:
-            print("HERE")
-            print(json.dumps(field_extractors, indent=3))
             last_item_line = extracted_data["_last_item_line"]
 
             for field, extractor in field_extractors.items():
@@ -1136,7 +1070,5 @@ class OCRTemplate:
         # Clean up internal fields
         if "_last_item_line" in extracted_data:
             del extracted_data["_last_item_line"]
-
-        print("extracted_data", extracted_data)
 
         return extracted_data

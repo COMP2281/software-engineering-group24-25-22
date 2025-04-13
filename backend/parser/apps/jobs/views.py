@@ -102,8 +102,6 @@ class ParseReceiptView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        print("METADATA")
-        print(json.dumps(metadata, indent=2))
         # Create a new processing job
         job = ProcessingJob(
             user_id=user_id,
@@ -135,7 +133,6 @@ class ParseReceiptView(APIView):
 
             # Start the task
             start_time = time.time()
-            print(f"Starting Celery task for job {job.id}")
 
             # Launch the task
             task = process_receipt_ocr.delay(str(job.id))
@@ -143,10 +140,8 @@ class ParseReceiptView(APIView):
             # Wait for task completion with timeout
             try:
                 task_result = task.get(timeout=30)  # 30 seconds timeout
-                print(f"Task result: {task_result}")
             except TimeoutError:
                 # If it times out, that's okay - we'll return a pending status
-                print(f"Task {task.id} is still processing (timeout reached)")
                 job.update_status("processing")
 
                 return Response(
@@ -160,7 +155,6 @@ class ParseReceiptView(APIView):
             except Exception as e:
                 # Handle other exceptions
                 error_msg = f"Processing task failed: {str(e)}"
-                print(error_msg)
                 job.update_status("failed", error_message=error_msg)
                 return Response(
                     {"error": error_msg}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -172,12 +166,6 @@ class ParseReceiptView(APIView):
 
             # Calculate processing time
             processing_time = time.time() - start_time
-
-            print("job.metadata", list(job.metadata.keys()))
-            print(
-                "job.metadata.extension_filename",
-                job.metadata.get("extension_filename", "None"),
-            )
 
             # Return job data immediately
             return Response(
@@ -220,7 +208,6 @@ class JobStatusView(APIView):
 
         # Extract user_id from JWT token if available and verify ownership
         auth_header = request.headers.get("Authorization")
-        print(request.headers)
         if auth_header and auth_header.startswith("Bearer "):
             import jwt
             from django.conf import settings
@@ -232,10 +219,7 @@ class JobStatusView(APIView):
                     token, settings.SECRET_KEY, algorithms=["HS256"]
                 )
 
-                print("decoded_token", decoded_token)
                 user_id = decoded_token.get("user_id")
-
-                print("user_id", user_id)
 
                 # Verify the user owns this job
                 if user_id and str(job.user_id) != str(user_id):
@@ -427,6 +411,7 @@ class ConfirmJobView(APIView):
                     # Process the correction through TemplateSuite
                     result = TemplateSuite.process_correction(
                         template_id=job.template_used,
+                        ocr_text=job.metadata["ocr_text_preprocessed"],
                         extracted_data=job.extracted_data.copy(),
                         corrected_data=corrections,
                     )
@@ -526,7 +511,6 @@ class GetAllJobs(APIView):
 
         # Extract user_id from JWT token if available and verify ownership
         auth_header = request.headers.get("Authorization")
-        print(request.headers)
         if auth_header and auth_header.startswith("Bearer "):
             import jwt
             from django.conf import settings
@@ -538,10 +522,7 @@ class GetAllJobs(APIView):
                     token, settings.SECRET_KEY, algorithms=["HS256"]
                 )
 
-                print("decoded_token", decoded_token)
                 user_id = decoded_token.get("user_id")
-
-                print("user_id", user_id)
 
                 def serialise_joblist(job: ProcessingJob):
 

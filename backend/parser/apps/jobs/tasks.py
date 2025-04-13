@@ -230,8 +230,6 @@ def transfer_to_gridfs(job_id):
         # Get the GridFS ID for the response
         gridfs_id = job.uploaded_file.grid_id
 
-        print(gridfs_id)
-
         # Log success
         logger.info(
             f"Successfully transferred job {job_id} to GridFS (id: {gridfs_id})"

@@ -319,8 +319,6 @@ class MongoDBAdmin(admin.ModelAdmin):
         app_label = self.model._meta.app_label
         model_name = self.model._meta.model_name
 
-        print(model_name)
-
         # Get the object
         obj = self.get_object(request, object_id)
         if not obj:

@@ -32,8 +32,6 @@ sys.path.append(str(BASE_DIR.parent))
 
 sys.path.append(str(BASE_DIR))
 
-print(sys.path)
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 

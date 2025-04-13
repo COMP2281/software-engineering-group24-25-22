@@ -156,9 +156,6 @@ class TemplateSuite:
         if not merchant_list:
             return None, 0
 
-        print("merchant_list", merchant_list)
-        print("receipt_text", receipt_text)
-
         # Try each matching strategy
         best_match = None
         best_score = 0
@@ -380,10 +377,6 @@ class TemplateSuite:
         template.record_usage()
 
         # Create OCR template and extract fields
-        print(
-            "FUCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCKK"
-        )
-        print(ocr_text)
         ocr_template = OCRTemplate(ocr_text)
 
         # Build template data structure
@@ -480,7 +473,7 @@ class TemplateSuite:
         field_corrections = {}
 
         # Compare extracted vs corrected values
-        for field, value in template.field_extractors.iitems():
+        for field, value in template.field_extractors.items():
             extracted = extracted_data.get(field)
             corrected = corrected_data.get(field, None)
 
@@ -732,17 +725,13 @@ class TemplateSuite:
             Dict with extracted data, template and image correspondence, and template info
         """
         ocr_text = TemplateSuite.preprocess_ocr_text(ocr_text)
-        print(ocr_text)
         # Extract merchant name from receipt if not provided
         if not merchant_name:
             receipt_lines = ocr_text.strip().split("\n")
             first_lines = "\n".join(receipt_lines[: min(4, len(receipt_lines))])
 
-            print(receipt_lines)
-
             # Try fuzzy matching first
             best_match, score = TemplateSuite.find_best_merchant_match(first_lines)
-            print("best_match", best_match)
             if best_match and score >= 70:
                 merchant_name = best_match
                 logger.info(
@@ -766,10 +755,6 @@ class TemplateSuite:
                 "template_id": None,
             }
 
-        print("--------------------- EXTRACTED DATA -------------------------------")
-        print("EXTRACTED_DATA", extracted_data)
-        print("--------------------- EXTRACTED DATA END ---------------------------")
-
         # Calculate correspondence based on fields extracted
         expected_fields = (
             len(template.field_extractors) if template.field_extractors else 1
@@ -779,8 +764,6 @@ class TemplateSuite:
             for k, v in extracted_data.items()
             if v and k not in ["cost_items", "currency", "currency_symbol"]
         )
-        print(extracted_data.keys())
-        print(expected_fields, extracted_fields)
         correspondence = (
             ((extracted_fields / expected_fields) * 100) if expected_fields > 0 else 0
         )
@@ -793,7 +776,7 @@ class TemplateSuite:
 
     @staticmethod
     def process_correction(
-        template_id: str, extracted_data: Dict[str, Any], corrected_data: Dict[str, Any]
+        template_id: str, ocr_text: str, extracted_data: Dict[str, Any], corrected_data: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         Direct interface for processing user corrections to improve templates.
@@ -801,6 +784,7 @@ class TemplateSuite:
 
         Args:
             template_id: ID of the template to update statistics and derive from.
+            ocr_text: The text the template parsed from.
             extracted_data: The extracted fields from the original OCR text
             corrected_data: The user's partial corrections of extracted fields
 
@@ -835,7 +819,7 @@ class TemplateSuite:
                 template = ReceiptTemplate.objects.get(id=template_id)
                 template_result = TemplateSuite.update_template_after_correction(
                     template,
-                    template.ocr_text_preprocessed,
+                    ocr_text,
                     extracted_data,
                     corrected_values,
                 )
@@ -889,12 +873,10 @@ class TemplateSuite:
             "currency": api_data.get("currency", "USD"),
         }
 
-        print("--------------- CONVERT TO INTERNAL FORMAT ----------------------")
         # Add line items if present
         if "cost_list" in api_data and api_data["cost_list"]:
             line_items = []
             for item in api_data["cost_list"]:
-                print(json.dumps(item))
                 line_items.append(
                     {
                         "item_name": item.get("item", ""),
@@ -904,7 +886,6 @@ class TemplateSuite:
                     }
                 )
             internal_data["line_items"] = line_items
-        print("--------------- CONVERT TO INTERNAL FORMAT END ------------------")
 
         return internal_data
 

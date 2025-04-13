@@ -91,7 +91,7 @@ export function FieldTable({ edit }: {edit: boolean} ) {
         return () => {
             isMounted = false; // Prevent state updates after unmount
         };
-    }, [id, edit, fields]);
+    }, [id]);
 
 	if (!id) {
 		return (
@@ -138,13 +138,13 @@ export function FieldTable({ edit }: {edit: boolean} ) {
                     </div>
                 ))}
             </div>
-            {
-                edit === true && (
-                    <div className="flex justify-end mt-4">
-                        <SaveButton itemID={id} fieldValues={currentFieldValues} edit={edit} />
-                    </div>
-                )
-            } 
+            {/* { */}
+            {/*     edit === true && ( */}
+            {/*         <div className="flex justify-end mt-4"> */}
+            {/*             <SaveButton itemID={id} fieldValues={currentFieldValues} edit={edit} /> */}
+            {/*         </div> */}
+            {/*     ) */}
+            {/* }  */}
         </div>
     );
 }

@@ -243,8 +243,6 @@ class EmployeeProfileView(APIView):
         try:
             # Keep the .get() method as it's correct in MongoEngine too
             profile = EmployeeProfile.objects.get(user=request.user)
-            print(f"Found profile: {profile}")
-            print(f"Request data: {request.data}")
 
             # Add user ID to the data - this is required by the serializer
             data = request.data.copy()
@@ -252,15 +250,12 @@ class EmployeeProfileView(APIView):
 
             serializer = EmployeeProfileSerializer(profile, data=data, partial=True)
             is_valid = serializer.is_valid()
-            print(f"Is valid: {is_valid}")
 
             if not is_valid:
                 print(f"Validation errors: {serializer.errors}")
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            print("Saving profile...")
             updated_profile = serializer.save()
-            print(f"Updated profile: {updated_profile}")
             return Response(serializer.data)
         except EmployeeProfile.DoesNotExist:
             return Response(
@@ -268,7 +263,6 @@ class EmployeeProfileView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         except Exception as e:
-            print(f"Error updating profile: {str(e)}")
             return Response(
                 {"detail": f"Error updating profile: {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
