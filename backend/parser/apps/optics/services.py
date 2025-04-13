@@ -486,7 +486,7 @@ class TemplateSuite:
             similarity = fuzz.ratio(extracted_str.lower(), corrected_str.lower())
 
             # If similarity is below 85, consider it a correction
-            if similarity < 85:
+            if similarity < 85 and len(corrected_str) != 0:
                 field_corrections[field] = False
                 template.calculate_updated_accuracy(field, False)
             else:
@@ -501,12 +501,14 @@ class TemplateSuite:
 
         if total_fields > 0:
             field_accuracy = (correct_fields / total_fields) * 100
+
             override_percentage = ((total_fields - correct_fields) / total_fields) * 100
 
             # Update with weighted average: 70% historical, 30% new
             template.success_rate = (template.success_rate * 0.7) + (
                 field_accuracy * 0.3
             )
+
             template.override_rate = (template.override_rate * 0.7) + (
                 override_percentage * 0.3
             )
@@ -532,7 +534,8 @@ class TemplateSuite:
         corrected_items_count = 0
         extracted_items_count = 0
 
-        if "cost_items" in extracted_data or "cost_items" in corrected_data:
+        if ("cost_items" in extracted_data or "cost_items" in corrected_data) and len(corrected_data.get("cost_items", [])) != 0:
+            print("checking cost_items now: ")
             extracted_items = extracted_data.get("cost_items", [])
             corrected_items = corrected_data.get("cost_items", [])
             extracted_items_count = len(extracted_items)

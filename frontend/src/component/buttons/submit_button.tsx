@@ -1,18 +1,19 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import Button from '@mui/material/Button';
 import { useParams, useNavigate } from 'react-router-dom'
-import { displayToProperty } from '../../utils/fieldMapping';
+import { correctionFields, descriptionFields } from '../../utils/fieldMapping';
 import { confirmParsedReceipt } from '../../utils/requests';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
 import Snackbar from '@mui/material/Snackbar';
+import { Corrections, Descriptions } from '../../types/corrections';
 import { JobCache } from '../buttons/upload_button';
+import { isEqual } from 'lodash';
 
 export function SubmitButton() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const fields = Object.values(displayToProperty);
-    
+
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
@@ -30,27 +31,45 @@ export function SubmitButton() {
 	const cachedData = JobCache.getData(id);
 
     const handleSubmit = async () => {
-        const corrections: { [key: string]: string } = {};
-		const fieldValues: { [key: string]: string } = {};
-        
+        const corrections: Corrections = {};
+		
         // Get values from form fields. We only send corrections, i.e. modified values.
-        for (let i = 0; i < fields.length; i++) {
-            const fieldId = `text-field-${id}-${fields[i]}`;
+        for (let i = 0; i < correctionFields.length; i++) {
+            const fieldId = `text-field-${id}-${correctionFields[i]}`;
             const textField = document.getElementById(fieldId) as HTMLInputElement;
-            if (textField && textField != cachedData[fields[i]]) {
-                fieldValues[fields[i]] = textField.value;
-            }
-        }
-        
-        setIsLoading(true);
+
+			if ( correctionFields[i] == "cost_items" ) {
+				if (textField && !isEqual(JSON.parse(textField.value), cachedData[correctionFields[i]])) {
+					corrections[correctionFields[i]] = JSON.parse(textField.value);
+				}
+			}
+			else{
+				if (cachedData[correctionFields[i]] === undefined) {
+					cachedData[correctionFields[i]] = ""
+				}
+				if (textField && textField.value != cachedData[correctionFields[i]]) {
+					corrections[correctionFields[i] as Exclude<keyof Corrections, 'cost_items'>] = textField.value;
+				}
+			}
+		}
+
+		const descriptions: Descriptions = {
+			description: "", 
+			category: "",
+		};
+
+		for (let i = 0; i  < descriptionFields.length; i++) {
+            const fieldId = `text-field-${id}-${descriptionFields[i]}`;
+            const textField = document.getElementById(fieldId) as HTMLInputElement;
+			if (textField && textField.value) {
+				descriptions[descriptionFields[i]] = textField.value
+			}
+		}
+
+		setIsLoading(true);
         setError(null);
 
         try {
-            // Convert field values to the format expected by the API
-			const descriptions = {
-				description: fieldValues['description'],
-				category: fieldValues['category']
-			}
             
             // Call API to confirm the parsing job
             const result = await confirmParsedReceipt(id, corrections, descriptions);

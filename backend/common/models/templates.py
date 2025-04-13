@@ -252,7 +252,7 @@ class ReceiptTemplate(Document):
     updated_at = DateTimeField()
     last_used_at = DateTimeField(default=timezone.now)
     usage_count = IntField(default=0)
-    success_rate = FloatField(default=0.0)  # 0-100 percentage
+    success_rate = FloatField(default=100.0)  # 0-100 percentage
     override_rate = FloatField(default=0.0)  # 0-100 percentage
     avg_edit_distance = FloatField(default=0.0)  # Average character-level differences
     is_archived = BooleanField(default=False)

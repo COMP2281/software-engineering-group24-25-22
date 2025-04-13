@@ -1,3 +1,4 @@
+import { Corrections, Descriptions } from "../types/corrections";
 // Base URL for API requests
 // Using import.meta.env for Vite instead of process.env
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -423,21 +424,6 @@ export const getParsingStatus = async (jobId: string): Promise<{ success: boolea
         };
     }
 };
-
-interface Corrections {
-	merchant_name: string;
-	transaction_time: string,
-	merchant_address: string,
-	reference_number: string,
-	total_amount: string,
-	tax_amount: string,
-	cost_items: Array<{ quantity: string, item_name: string, total_price: string, unit_price: string }>,
-}
-
-interface Descriptions {
-	description: string,
-	category: string
-}
 
 export const confirmParsedReceipt = async (jobId: string, corrections: Corrections, descriptions: Descriptions): Promise<{ success: boolean; data?: any; error?: string }> => {
     try {
