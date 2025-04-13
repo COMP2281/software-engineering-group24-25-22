@@ -45,7 +45,6 @@ export const login = async (email: string, password: string): Promise<{ success:
         });
 
         const data = await response.json();
-        console.log("Login response:", data); // For debugging
 
         if (!response.ok) {
             // Handle different error formats from the backend
@@ -53,10 +52,7 @@ export const login = async (email: string, password: string): Promise<{ success:
             
             if (data.non_field_errors && data.non_field_errors.length > 0) {
                 // Handle Django Rest Framework's non_field_errors
-                errorMessage = data.non_field_errors[0];
-                if (typeof errorMessage === 'object' && errorMessage.string) {
-                    errorMessage = errorMessage.string;
-                }
+                errorMessage = data.non_field_errors.join(",");
             } else if (data.detail) {
                 errorMessage = data.detail;
             } else if (data.error) {
@@ -88,6 +84,7 @@ export const login = async (email: string, password: string): Promise<{ success:
 
 export const logout = async (): Promise<boolean> => {
     try {
+		const accessToken = localStorage.getItem('accessToken');
         const refreshToken = localStorage.getItem('refreshToken');
         if (!refreshToken) return true;
 
@@ -95,6 +92,7 @@ export const logout = async (): Promise<boolean> => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+				'Authorization': `Bearer ${accessToken}`
             },
             body: JSON.stringify({ refresh: refreshToken }),
         });
@@ -163,12 +161,18 @@ const refreshToken = async (): Promise<string | null> => {
 export const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
     let accessToken = localStorage.getItem('accessToken');
 
-    // Set up headers with authorization
-    let headers: HeadersInit = {
+    let headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        ...options.headers,
         'Authorization': `Bearer ${accessToken}`
     };
+    
+    // Merge any existing headers from options
+    if (options.headers) {
+        const optionHeaders = options.headers as Record<string, string>;
+        Object.keys(optionHeaders).forEach(key => {
+            headers[key] = optionHeaders[key];
+        });
+    }
     
     // Add CSRF token if available and not already present
     if (!headers['X-CSRFToken']) {

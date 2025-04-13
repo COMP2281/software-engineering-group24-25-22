@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LoginInputFields } from '../component/fields/login_input_fields';
 import { LoginButton } from '../component/buttons/login_button';
@@ -36,7 +36,6 @@ export function Login() {
         
         try {
             const result = await login(email, password);
-            console.log("Login result:", result); // For debugging
             
             if (result.success) {
                 setShowSuccess(true);

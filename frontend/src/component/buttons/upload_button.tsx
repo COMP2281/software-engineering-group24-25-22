@@ -98,7 +98,6 @@ export function UploadButton({ onUploadSuccess, onUploadError }: UploadButtonPro
                 // Store the extracted data in our cache
                 JobCache.storeData(uniqueId, enhancedData);
                 
-                console.log('Receipt parsed successfully:', enhancedData);
                 onUploadSuccess?.(uniqueId, enhancedData);
             } else {
                 onUploadError?.(result.error || 'Failed to upload receipt');

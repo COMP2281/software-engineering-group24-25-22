@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import IconButton from '@mui/material/IconButton';
 import EditIcon from '@mui/icons-material/Edit';
@@ -13,7 +12,6 @@ export function BoxBase({ items, buttonOption }: BoxBaseProps) {
     const navigate = useNavigate();
 
     const handleEdit = (id: number) => {
-		console.log(id)
         navigate(`/upload/${id}`);
     };
 

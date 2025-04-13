@@ -255,7 +255,7 @@ class EmployeeProfileView(APIView):
                 print(f"Validation errors: {serializer.errors}")
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            updated_profile = serializer.save()
+            serializer.save()
             return Response(serializer.data)
         except EmployeeProfile.DoesNotExist:
             return Response(
