@@ -378,6 +378,30 @@ export const parseReceipt = async (file: File): Promise<{ success: boolean; data
     }
 };
 
+export const getAllJobs = async (): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+        const response = await fetchWithAuth(`/api/parser/all`, {
+			method: 'GET'
+		});
+        
+        if (!response.ok) {
+            return {
+                success: false,
+                error: 'Failed to get parsing status'
+            };
+        }
+        
+        const data = await response.json();
+        return { success: true, data, };
+    } catch (error) {
+        console.error(`Error getting user's job list:`, error);
+        return {
+            success: false,
+            error: 'Network error occurred'
+        };
+    }
+}
+
 export const getParsingStatus = async (jobId: string): Promise<{ success: boolean; data?: any; error?: string }> => {
     try {
         const response = await fetchWithAuth(`/api/parser/status/${jobId}/`);

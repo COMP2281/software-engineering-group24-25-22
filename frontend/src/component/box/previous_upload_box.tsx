@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { BoxBase } from './box_base';
-import { PendingItem } from '../../types/receipt';
+import { PendingReceipt as PendingReceipt } from '../../types/receipt';
 import { getReceipts } from '../../utils/requests';
 import CircularProgress from '@mui/material/CircularProgress';
 
 export function PreviosUploadBox() {
-    const [receipts, setReceipts] = useState<PendingItem[]>([]);
+    const [receipts, setReceipts] = useState<PendingReceipt[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     
@@ -23,7 +23,7 @@ export function PreviosUploadBox() {
             
             if (result.success && result.data) {
                 // Convert backend Receipt format to PendingItem format for display
-                const formattedReceipts: PendingItem[] = result.data.map((receipt: any) => ({
+                const formattedReceipts: PendingReceipt[] = result.data.map((receipt: any) => ({
                     id: receipt.id,
                     title: receipt.merchant_name || 'Unknown Merchant',
                     merchant: receipt.merchant_name || 'Unknown Merchant',

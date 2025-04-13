@@ -1,14 +1,13 @@
-export interface PendingItem {
+export interface PendingReceipt {
     id: number;
     title: string;
-    merchant_name: string;
-    transaction_time: string;
-    merchant_address: string;
-    reference_number: string;
-    total_amount: string;
-	cost_items: string,
+    merchant: string;
+    time: string;
+    address: string;
+    ref: string;
+    cost: string;
     description: string;
-    tax_amount: string;
+    tax: string;
     category: string;
     image: string;
 } 

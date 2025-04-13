@@ -1,9 +1,9 @@
 import testImage from '../items/receipt1.png';
 import testImage2 from '../items/receipt2.png';
-import { PendingItem } from "../types/receipt";
+import { PendingReceipt } from "../types/receipt";
 
 
-export const pendingItems: PendingItem[] = [
+export const pendingItems: PendingReceipt[] = [
     {
         id: 1,
         title: 'Receipt1',
@@ -71,7 +71,7 @@ export const pendingItems: PendingItem[] = [
     },
 ]; 
 
-export const finished_receipts: PendingItem[] = [
+export const finished_receipts: PendingReceipt[] = [
     {
         id: 1,
         title: 'Receipt1',

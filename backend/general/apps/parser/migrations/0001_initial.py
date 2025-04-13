@@ -4,31 +4,45 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='ProcessingJobProxy',
+            name="ProcessingJobProxy",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Processing Job',
-                'verbose_name_plural': 'Processing Jobs',
+                "verbose_name": "Processing Job",
+                "verbose_name_plural": "Processing Jobs",
             },
         ),
         migrations.CreateModel(
-            name='ReceiptTemplateProxy',
+            name="ReceiptTemplateProxy",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Receipt Template',
-                'verbose_name_plural': 'Receipt Templates',
+                "verbose_name": "Receipt Template",
+                "verbose_name_plural": "Receipt Templates",
             },
         ),
     ]

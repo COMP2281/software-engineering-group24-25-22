@@ -25,9 +25,11 @@ export function ImageField({ progress, edit }: BoxBaseProps) {
             const cachedImageUrl = JobCache.getImageUrl(id);
             
             if (cachedImageUrl) {
+				console.log("cached")
                 setImageUrl(cachedImageUrl);
                 setIsLoading(false);
             } else {
+				console.log("not cached")
 				if (edit === true) {
 					// If not in cache, fetch from server
 					fetchJobDetails();
@@ -67,6 +69,7 @@ export function ImageField({ progress, edit }: BoxBaseProps) {
 				else if (result.data.file) {
 					const dataUrl = `data:image/jpeg;base64,${result.data.file}`;
 					setImageUrl(dataUrl);
+					console.log(dataUrl)
 					
 					// Optionally cache this for future use
 					if (id) {

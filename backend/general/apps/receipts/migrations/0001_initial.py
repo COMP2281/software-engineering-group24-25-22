@@ -4,31 +4,45 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='CostItemProxy',
+            name="CostItemProxy",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Cost Item',
-                'verbose_name_plural': 'Cost Items',
+                "verbose_name": "Cost Item",
+                "verbose_name_plural": "Cost Items",
             },
         ),
         migrations.CreateModel(
-            name='ReceiptProxy',
+            name="ReceiptProxy",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Receipt',
-                'verbose_name_plural': 'Receipts',
+                "verbose_name": "Receipt",
+                "verbose_name_plural": "Receipts",
             },
         ),
     ]

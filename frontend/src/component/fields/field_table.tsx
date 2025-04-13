@@ -48,7 +48,7 @@ export function FieldTable({ edit }: {edit: boolean} ) {
                         setIsLoading(false);
                     }
                     return true; // Data was loaded from cache
-                }
+				}
             }
 			else {
 				try {

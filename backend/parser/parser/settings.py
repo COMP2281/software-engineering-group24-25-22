@@ -25,7 +25,8 @@ django_stubs_ext.monkeypatch()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 MONGODB_SOCKET = parse.quote_plus(
-    path.join('../', 'general', 'server', 'db',  'general.sock'))
+    path.join("../", "general", "server", "db", "general.sock")
+)
 
 sys.path.append(str(BASE_DIR.parent))
 
@@ -37,13 +38,13 @@ print(sys.path)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Temp upload directory for job processing (not web accessible)
-TEMP_UPLOAD_DIR = os.path.join(BASE_DIR, 'server', 'tmp_uploads')
+TEMP_UPLOAD_DIR = os.path.join(BASE_DIR, "server", "tmp_uploads")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-oyajap)nc^ur#$v)67oj4p86=2sezj$5pwx$!f%e2gmu=xxjqr'
+SECRET_KEY = "django-insecure-oyajap)nc^ur#$v)67oj4p86=2sezj$5pwx$!f%e2gmu=xxjqr"
 
 # This must match the general server's SECRET_KEY for JWT verification to work
 
@@ -57,37 +58,37 @@ ALLOWED_HOSTS = []
 
 INSTALLED_APPS = [
     # Minimal set of apps for a lightweight parser service
-    'django.contrib.sessions',          # Required by rest_framework_simplejwt
-    'django.contrib.contenttypes',  # Keep this as some core functionality depends on it
-    'django.contrib.auth',          # Required by rest_framework_simplejwt
-    'apps.jobs',
-    'apps.optics',
-    'rest_framework',
-    'rest_framework_simplejwt'
+    "django.contrib.sessions",  # Required by rest_framework_simplejwt
+    "django.contrib.contenttypes",  # Keep this as some core functionality depends on it
+    "django.contrib.auth",  # Required by rest_framework_simplejwt
+    "apps.jobs",
+    "apps.optics",
+    "rest_framework",
+    "rest_framework_simplejwt",
 ]
 
 MIDDLEWARE = [
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.security.SecurityMiddleware',
-    'django.middleware.common.CommonMiddleware',
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "django.middleware.common.CommonMiddleware",
     # Removed CSRF middleware as it's not needed for API-only service
-    'django.contrib.auth.middleware.AuthenticationMiddleware',  # Required for JWT auth
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.contrib.auth.middleware.AuthenticationMiddleware",  # Required for JWT auth
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # 'apps.jobs.views.APIKeyAuthentication',  # API key authentication middleware
 ]
 
 # Celery Configuration with MongoDB backend
-CELERY_BROKER_URL = f'mongodb://localhost:27017/celery'
-CELERY_RESULT_BACKEND = f'mongodb://localhost:27017/celery'
+CELERY_BROKER_URL = f"mongodb://localhost:27017/celery"
+CELERY_RESULT_BACKEND = f"mongodb://localhost:27017/celery"
 CELERY_MONGODB_BACKEND_SETTINGS = {
-    'database': 'celery',
-    'taskmeta_collection': 'celery_taskmeta',
-    'groupmeta_collection': 'celery_groupmeta',
+    "database": "celery",
+    "taskmeta_collection": "celery_taskmeta",
+    "groupmeta_collection": "celery_groupmeta",
 }
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = 'UTC'
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "UTC"
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 CELERY_WORKER_CONCURRENCY = 4  # Limit to 3 concurrent jobs
@@ -96,41 +97,41 @@ CELERY_TASK_ACKS_LATE = True  # Ensure tasks aren't lost on worker crash
 # Celery Beat Schedule
 
 CELERY_BEAT_SCHEDULE = {
-    'template-maintenance-daily': {
-        'task': 'apps.optics.tasks.run_template_maintenance',
-        'schedule': crontab(hour='3', minute='0'),  # Run at 3:00 AM every day
-        'options': {'expires': 60 * 60 * 24},  # Expire after 24 hours
+    "template-maintenance-daily": {
+        "task": "apps.optics.tasks.run_template_maintenance",
+        "schedule": crontab(hour="3", minute="0"),  # Run at 3:00 AM every day
+        "options": {"expires": 60 * 60 * 24},  # Expire after 24 hours
     },
-    'temp-file-cleanup-daily': {
-        'task': 'apps.jobs.tasks.cleanup_temporary_files',
-        'schedule': crontab(hour='2', minute='0'),  # Run at 2:00 AM every day
-        'options': {'expires': 60 * 60 * 24},  # Expire after 24 hours
+    "temp-file-cleanup-daily": {
+        "task": "apps.jobs.tasks.cleanup_temporary_files",
+        "schedule": crontab(hour="2", minute="0"),  # Run at 2:00 AM every day
+        "options": {"expires": 60 * 60 * 24},  # Expire after 24 hours
     },
-    'old-job-cleanup-weekly': {
-        'task': 'apps.jobs.tasks.cleanup_old_jobs',
+    "old-job-cleanup-weekly": {
+        "task": "apps.jobs.tasks.cleanup_old_jobs",
         # Run at 1:00 AM every Monday
-        'schedule': crontab(hour='1', minute='0', day_of_week='1'),
-        'options': {'expires': 60 * 60 * 24},  # Expire after 24 hours
+        "schedule": crontab(hour="1", minute="0", day_of_week="1"),
+        "options": {"expires": 60 * 60 * 24},  # Expire after 24 hours
     },
 }
 
-ROOT_URLCONF = 'parser.urls'
+ROOT_URLCONF = "parser.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'parser.wsgi.application'
+WSGI_APPLICATION = "parser.wsgi.application"
 
 # REST_FRAMEWORK = {
 #     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -139,18 +140,18 @@ WSGI_APPLICATION = 'parser.wsgi.application'
 # }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'VERIFYING_KEY': None,
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_TYPE_CLAIM': 'token_type',
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "VERIFYING_KEY": None,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
 }
 
 # Database
@@ -158,17 +159,14 @@ SIMPLE_JWT = {
 
 
 # Connect to MongoDB
-mongoengine.connect(
-    db='receipt_scanner_db',
-    host='mongodb://'+MONGODB_SOCKET
-)
+mongoengine.connect(db="receipt_scanner_db", host="mongodb://" + MONGODB_SOCKET)
 
 # Django still needs a database for its own functionality
 # This will be unused but is required for Django to work
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
 }
 
@@ -180,9 +178,9 @@ AUTH_PASSWORD_VALIDATORS = []
 # Internationalization
 # https://docs.djangoproject.com/en/4.1/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -192,21 +190,21 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = "static/"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Cache settings
 CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-mindset',
-        'TIMEOUT': 3600,  # 1 hour default timeout
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-mindset",
+        "TIMEOUT": 3600,  # 1 hour default timeout
     }
 }
 
 # API Authentication Key
-API_KEY = 'test_api_key'
+API_KEY = "test_api_key"

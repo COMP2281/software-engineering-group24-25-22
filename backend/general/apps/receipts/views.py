@@ -49,67 +49,80 @@ class ReceiptViewSet(viewsets.ModelViewSet):
         """
         serializer.save(employee=self.request.user)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def export(self, request):
         """
         Export receipts to CSV or JSON format with filtering options
         """
-        format_type = request.query_params.get('format', 'csv')
-        
+        format_type = request.query_params.get("format", "csv")
+
         # Start with all receipts for the current user
         queryset = Receipt.objects(employee=self.request.user)
-        
+
         # Date range filtering
-        start_date = request.query_params.get('start_date')
-        end_date = request.query_params.get('end_date')
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
         if start_date:
             queryset = queryset(transaction_time__gte=start_date)
         if end_date:
             queryset = queryset(transaction_time__lte=end_date)
-        
+
         # Category filtering
-        category = request.query_params.get('category')
+        category = request.query_params.get("category")
         if category:
             queryset = queryset(category=category)
-        
+
         # Status filtering
-        status = request.query_params.get('status')
+        status = request.query_params.get("status")
         if status:
             queryset = queryset(status=status)
-        
+
         # Limit results
-        limit = request.query_params.get('limit')
+        limit = request.query_params.get("limit")
         if limit and limit.isdigit():
-            queryset = queryset[:int(limit)]
-        
-        if format_type.lower() == 'json':
+            queryset = queryset[: int(limit)]
+
+        if format_type.lower() == "json":
             # JSON export
             serializer = self.get_serializer(queryset, many=True)
             return Response(serializer.data)
         else:
             # CSV export (default)
-            response = HttpResponse(content_type='text/csv')
-            response['Content-Disposition'] = 'attachment; filename="receipts_export.csv"'
-            
+            response = HttpResponse(content_type="text/csv")
+            response["Content-Disposition"] = (
+                'attachment; filename="receipts_export.csv"'
+            )
+
             writer = csv.writer(response)
             # Write header
-            writer.writerow([
-                'ID', 'Merchant', 'Date', 'Category', 'Description', 
-                'Total Amount', 'Currency', 'Tax Amount', 'Status'
-            ])
-            
+            writer.writerow(
+                [
+                    "ID",
+                    "Merchant",
+                    "Date",
+                    "Category",
+                    "Description",
+                    "Total Amount",
+                    "Currency",
+                    "Tax Amount",
+                    "Status",
+                ]
+            )
+
             # Write data
             for receipt in queryset:
-                writer.writerow([
-                    receipt.pk,
-                    receipt.merchant_name,
-                    receipt.transaction_time.strftime('%Y-%m-%d %H:%M'),
-                    receipt.category,
-                    receipt.description,
-                    receipt.total_amount,
-                    receipt.currency,
-                    receipt.tax_amount or '',
-                    receipt.status
-                ])
-            
+                writer.writerow(
+                    [
+                        receipt.pk,
+                        receipt.merchant_name,
+                        receipt.transaction_time.strftime("%Y-%m-%d %H:%M"),
+                        receipt.category,
+                        receipt.description,
+                        receipt.total_amount,
+                        receipt.currency,
+                        receipt.tax_amount or "",
+                        receipt.status,
+                    ]
+                )
+
             return response

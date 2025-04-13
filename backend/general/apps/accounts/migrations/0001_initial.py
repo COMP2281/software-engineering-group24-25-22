@@ -4,41 +4,63 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='EmployeeProfileProxy',
+            name="EmployeeProfileProxy",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Employee Profile',
-                'verbose_name_plural': 'Employee Profiles',
+                "verbose_name": "Employee Profile",
+                "verbose_name_plural": "Employee Profiles",
             },
         ),
         migrations.CreateModel(
-            name='ExpenseSettingsProxy',
+            name="ExpenseSettingsProxy",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Expense Settings',
-                'verbose_name_plural': 'Expense Settings',
+                "verbose_name": "Expense Settings",
+                "verbose_name_plural": "Expense Settings",
             },
         ),
         migrations.CreateModel(
-            name='UserProxy',
+            name="UserProxy",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'User',
-                'verbose_name_plural': 'Users',
+                "verbose_name": "User",
+                "verbose_name_plural": "Users",
             },
         ),
     ]

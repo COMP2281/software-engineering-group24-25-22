@@ -64,7 +64,7 @@ export function SubmitButton() {
                 
                 // Wait a bit before navigating away
                 setTimeout(() => {
-                    navigate('/upload');
+                    navigate('/dashboard');
                 }, 1500);
             } else {
                 setError(result.error || 'Failed to confirm receipt');

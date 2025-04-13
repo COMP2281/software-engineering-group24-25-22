@@ -1,6 +1,6 @@
-import { PendingItem } from '../types/receipt';
+import { PendingReceipt } from '../types/receipt';
 
-export const displayToProperty: { [key: string]: keyof PendingItem } = {
+export const displayToProperty: { [key: string]: keyof PendingReceipt } = {
     'Merchant Name': 'merchant_name',
     'Time': 'transaction_time',
     'Address': 'merchant_address',
@@ -15,4 +15,4 @@ export const displayToProperty: { [key: string]: keyof PendingItem } = {
 // Maps PendingItem property names to display names
 export const propertyToDisplay = Object.fromEntries(
     Object.entries(displayToProperty).map(([display, prop]) => [prop, display])
-) as { [K in keyof PendingItem]?: string }; 
+) as { [K in keyof PendingReceipt]?: string }; 
