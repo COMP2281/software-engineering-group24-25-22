@@ -1,20 +1,23 @@
   {
     "include": [
-      "general",
-      "parser"
+		"./backend/"
     ],
     "exclude": [
       "**/node_modules",
       "**/__pycache__",
       "**/.venv"
     ],
+	"extraPaths": [
+	  "/home/aunkquoi/Projects/Apps/Receipt/backend/parser"
+	],
+
     "venvPath": ".",
     "venv": ".env",
     "reportMissingImports": true,
     "reportMissingTypeStubs": false,
     "pythonVersion": "3.10",
     "typeCheckingMode": "basic",
-    "stubPath": "typings",
+    "stubPath": "backend/typings",
     "extraPaths": [],
     "useLibraryCodeForTypes": true
   }

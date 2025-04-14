@@ -12,7 +12,7 @@ class IsOwner(permissions.BasePermission):
     Custom permission to only allow owners of a receipt to view or edit it
     """
 
-    def has_object_permission(self, request, view, obj):
+    def has_object_permission(self, request, _, obj):
         return obj.employee == request.user
 
 

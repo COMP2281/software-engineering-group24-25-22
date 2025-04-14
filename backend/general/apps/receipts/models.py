@@ -3,7 +3,6 @@ from mongoengine import (
     StringField,
     DateTimeField,
     FloatField,
-    BooleanField,
     FileField,
     DecimalField,
     ReferenceField,

@@ -236,7 +236,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
             return {
                 "refresh": str(refresh),
-                "access": str(refresh.access_token),
+                "access": str(refresh.access_token), # type: ignore
                 "user": UserDetailsSerializer(user).data,
             }
         except Exception as e:

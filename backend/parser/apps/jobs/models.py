@@ -1,8 +1,7 @@
 import uuid
-import os
 from pathlib import Path
-from mongoengine import Document, StringField, DateTimeField, IntField, FloatField
-from mongoengine import BooleanField, FileField, DictField, UUIDField, CASCADE, NULLIFY
+from mongoengine import Document, StringField, DateTimeField, FloatField
+from mongoengine import FileField, DictField, UUIDField 
 from django.utils import timezone
 from django.conf import settings
 

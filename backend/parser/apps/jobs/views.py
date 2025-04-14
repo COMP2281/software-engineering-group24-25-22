@@ -139,7 +139,7 @@ class ParseReceiptView(APIView):
 
             # Wait for task completion with timeout
             try:
-                task_result = task.get(timeout=30)  # 30 seconds timeout
+                _ = task.get(timeout=30)  # 30 seconds timeout
             except TimeoutError:
                 # If it times out, that's okay - we'll return a pending status
                 job.update_status("processing")

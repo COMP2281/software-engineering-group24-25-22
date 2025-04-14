@@ -1,0 +1,19 @@
+import consul
+from _typeshed import Incomplete
+from celery.backends.base import KeyValueStoreBackend
+from collections.abc import Generator
+
+__all__ = ['ConsulBackend']
+
+class ConsulBackend(KeyValueStoreBackend):
+    consul = consul
+    supports_autoexpire: bool
+    consistency: str
+    path: Incomplete
+    one_client: Incomplete
+    def __init__(self, *args, **kwargs) -> None: ...
+    def client(self): ...
+    def get(self, key): ...
+    def mget(self, keys) -> Generator[Incomplete]: ...
+    def set(self, key, value): ...
+    def delete(self, key): ...

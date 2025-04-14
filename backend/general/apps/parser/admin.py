@@ -7,15 +7,16 @@ from apps.accounts.admin import MongoDBAdmin
 # Add parser app path to Python path
 parser_path = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
-    "parser",
 )
 if parser_path not in sys.path:
     sys.path.append(parser_path)
 
+print(parser_path)
+
 # Import parser models
 try:
-    from apps.jobs.models import ProcessingJob
-    from apps.optics.models import ReceiptTemplate
+    from parser.apps.jobs.models import ProcessingJob
+    from common.models.templates import ReceiptTemplate
 
     # Create proxy models for MongoDB documents
     class ProcessingJobProxy(models.Model):
@@ -107,7 +108,7 @@ try:
                 try:
                     template = ReceiptTemplate.objects.get(id=obj.template_used)
                     return template
-                except:
+                except Exception:
                     return None
             return None
 

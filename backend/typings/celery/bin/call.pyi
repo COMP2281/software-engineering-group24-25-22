@@ -1,0 +1,3 @@
+from celery.bin.base import CeleryCommand as CeleryCommand, CeleryOption as CeleryOption, ISO8601 as ISO8601, ISO8601_OR_FLOAT as ISO8601_OR_FLOAT, JSON_ARRAY as JSON_ARRAY, JSON_OBJECT as JSON_OBJECT, handle_preload_options as handle_preload_options
+
+def call(ctx, name, args, kwargs, eta, countdown, expires, serializer, queue, exchange, routing_key) -> None: ...

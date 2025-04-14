@@ -1,0 +1,9 @@
+from celery.bin.base import COMMA_SEPARATED_LIST as COMMA_SEPARATED_LIST, CeleryCommand as CeleryCommand, CeleryOption as CeleryOption, handle_preload_options as handle_preload_options
+from celery.exceptions import CeleryCommandException as CeleryCommandException
+from celery.platforms import EX_UNAVAILABLE as EX_UNAVAILABLE
+from celery.utils import text as text
+from celery.worker.control import Panel as Panel
+
+def status(ctx, timeout, destination, json, **kwargs) -> None: ...
+def inspect(ctx, command, timeout, destination, json, **kwargs) -> None: ...
+def control(ctx, command, timeout, destination, json) -> None: ...

@@ -1,0 +1,3 @@
+__all__ = ['get_loader_cls']
+
+def get_loader_cls(loader): ...

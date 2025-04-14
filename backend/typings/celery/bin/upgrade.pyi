@@ -1,0 +1,6 @@
+from celery.app import defaults as defaults
+from celery.bin.base import CeleryCommand as CeleryCommand, CeleryOption as CeleryOption, handle_preload_options as handle_preload_options
+from celery.utils.functional import pass1 as pass1
+
+def upgrade(ctx) -> None: ...
+def settings(filename, django, compat, no_backup) -> None: ...

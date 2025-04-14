@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { BoxBase } from './box_base';
 import { PendingReceipt as PendingReceipt } from '../../types/receipt';
 import { getReceipts } from '../../utils/requests';

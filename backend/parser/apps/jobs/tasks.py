@@ -5,7 +5,6 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from django.utils import timezone
 from django.conf import settings
-from django.db.models import Q
 from celery import shared_task
 from apps.jobs.utils import temp_file_path
 
@@ -288,7 +287,7 @@ def cleanup_old_jobs():
     # Only proceed if there are jobs to delete
     if count > 0:
         # Delete the jobs
-        deletion_result = old_jobs.delete()
+        _ = old_jobs.delete()
         logger.info(f"Deleted {count} job records")
 
     # Calculate duration

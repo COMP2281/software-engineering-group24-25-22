@@ -1,18 +1,15 @@
 from mongoengine import Document, StringField, EmailField, BooleanField, DateTimeField
 from mongoengine import (
     ReferenceField,
-    DictField,
     DecimalField,
     CASCADE,
     NULLIFY,
     ListField,
 )
-import mongoengine
 from django.utils import timezone
 from django.contrib.auth.signals import user_logged_in
 from django.dispatch import receiver
 from django.contrib.auth.hashers import make_password, check_password
-import uuid
 
 # Django ORM imports for blacklisted tokens
 from django.db import models

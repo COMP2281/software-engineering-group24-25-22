@@ -1,0 +1,3 @@
+__all__ = ['default']
+
+def default(task, app, consumer, info=..., error=..., task_reserved=..., to_system_tz=..., bytes=..., proto1_to_proto2=...): ...

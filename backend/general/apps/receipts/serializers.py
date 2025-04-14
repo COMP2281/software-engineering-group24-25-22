@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from common.serializers import DocumentSerializer
-from .models import Receipt, CostItem
+from .models import Receipt 
 from bson import ObjectId
 import base64
 
@@ -33,7 +33,7 @@ class ReceiptDocumentSerializer(DocumentSerializer):
 
         return ret
 
-    def custom_representation(self, instance, data):
+    def custom_representation(self,  data, ret):
         """
         Override this to add custom fields to the representation
         """

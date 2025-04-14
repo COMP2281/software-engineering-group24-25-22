@@ -1,0 +1,9 @@
+from _typeshed import Incomplete
+
+__all__ = ['Event', 'event_exchange', 'get_exchange', 'group_from']
+
+event_exchange: Incomplete
+
+def Event(type, _fields: Incomplete | None = None, __dict__=..., __now__=..., **fields): ...
+def group_from(type): ...
+def get_exchange(conn, name=...): ...

@@ -1,0 +1,6 @@
+from _typeshed import Incomplete
+
+__all__ = ['by_name', 'by_url']
+
+def by_name(backend: Incomplete | None = None, loader: Incomplete | None = None, extension_namespace: str = 'celery.result_backends'): ...
+def by_url(backend: Incomplete | None = None, loader: Incomplete | None = None): ...

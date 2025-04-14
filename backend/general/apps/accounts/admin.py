@@ -1,6 +1,10 @@
 from django.contrib import admin
+from django.contrib.auth.models import AnonymousUser
 from django.db import models
+from django.http import HttpResponse
 from django.utils.html import format_html
+from rest_framework import status
+from rest_framework.response import Response
 from .models import User, EmployeeProfile, ExpenseSettings, BlacklistedToken
 
 
@@ -46,20 +50,22 @@ class MongoDBAdmin(admin.ModelAdmin):
 
     def changelist_view(self, request, extra_context=None):
         """Override changelist view to directly handle MongoDB objects"""
-        from django.shortcuts import render
 
         # Check if user is authenticated and has permission
         if not request.user.is_authenticated:
             from django.contrib.admin.views.decorators import staff_member_required
 
-            return staff_member_required(lambda r: None)(request)
+            return staff_member_required(lambda _: None)(request)
 
         # Get basic admin data
         app_label = self.model._meta.app_label
         model_name = self.model._meta.model_name
         title = f"{self.model._meta.verbose_name_plural}"
-
         # Fetch MongoDB data
+
+        if self.mongo_model is None:
+            raise Exception("This should not happen!")
+
         mongo_objects = list(self.mongo_model.objects.all())
 
         # Create a simple HTML table display
@@ -79,6 +85,9 @@ class MongoDBAdmin(admin.ModelAdmin):
 
             # Process all fields
             for field_index, field_name in enumerate(self.list_display):
+                if not isinstance(field_name, str):
+                    continue
+
                 if hasattr(self, field_name) and callable(getattr(self, field_name)):
                     method = getattr(self, field_name)
                     value = method(obj)
@@ -215,7 +224,7 @@ class MongoDBAdmin(admin.ModelAdmin):
                         <h1 id="site-name"><a href="/admin/">Django administration</a></h1>
                     </div>
                     <div id="user-tools">
-                        Welcome, <strong>{request.user.username}</strong>.
+                        Welcome, <strong>{request.user.username if isinstance(request.user, AnonymousUser) else ""}</strong>.
                         <a href="/admin/password_change/">Change password</a> /
                         <a href="/admin/logout/">Log out</a>
                     </div>
@@ -337,6 +346,9 @@ class MongoDBAdmin(admin.ModelAdmin):
 
         # First add special fields from list_display methods
         for field_name in self.list_display:
+            if not isinstance(field_name, str):
+                continue
+
             if hasattr(self, field_name) and callable(getattr(self, field_name)):
                 method = getattr(self, field_name)
                 if field_name != "get_display_data":  # Skip the raw data display
@@ -411,7 +423,7 @@ class MongoDBAdmin(admin.ModelAdmin):
                     formatted_value = (
                         f"<pre>{json.dumps(value, default=str, indent=2)}</pre>"
                     )
-                except:
+                except Exception:
                     formatted_value = f"<pre>{str(value)}</pre>"
             elif isinstance(value, bool):
                 icon = "✓" if value else "✗"
@@ -543,10 +555,13 @@ class MongoDBAdmin(admin.ModelAdmin):
 
     def get_object(self, request, object_id, from_field=None):
         """Get the MongoDB object by ID"""
+        if self.mongo_model is None:
+            return None
+
         try:
             # Direct MongoDB query
             return self.mongo_model.objects.get(id=object_id)
-        except:
+        except Exception:
             return None
 
     def get_urls(self):
@@ -587,7 +602,7 @@ class UserAdmin(MongoDBAdmin):
         response = super().changelist_view(request, extra_context)
 
         # If this is a direct HttpResponse (our custom HTML), we need to modify it
-        if hasattr(response, "content") and isinstance(response.content, bytes):
+        if hasattr(response, "content") and response is not None and isinstance(response.content, bytes):
             html_content = response.content.decode("utf-8")
 
             # Make the email cells clickable - find td cells containing the email
@@ -626,10 +641,20 @@ class UserAdmin(MongoDBAdmin):
                 # Replace the original row in the full HTML
                 html_content = html_content.replace(row_html, new_row_html)
 
-            # Return modified response
-            response.content = html_content.encode("utf-8")
+        if response is None:
+            return Response(                                                  
+                {"error": "Response is none" },                        
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+)                                                                 
+        new_response = HttpResponse(
+                content=html_content.encode('utf-8'),
+                content_type=response.get("Content-Type", 'text/html')
+        )
 
-        return response
+        for key, value in response.items():
+            new_response[key] = value
+
+        return new_response
 
     def get_email(self, obj):
         return obj.email

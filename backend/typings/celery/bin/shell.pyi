@@ -1,0 +1,3 @@
+from celery.bin.base import CeleryCommand as CeleryCommand, CeleryOption as CeleryOption, handle_preload_options as handle_preload_options
+
+def shell(ctx, ipython: bool = False, bpython: bool = False, python: bool = False, without_tasks: bool = False, eventlet: bool = False, gevent: bool = False, **kwargs) -> None: ...

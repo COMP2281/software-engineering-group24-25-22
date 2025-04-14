@@ -1,0 +1,29 @@
+from .base import KeyValueStoreBackend
+from _typeshed import Incomplete
+from collections.abc import Generator
+
+__all__ = ['ArangoDbBackend']
+
+class ArangoDbBackend(KeyValueStoreBackend):
+    host: str
+    port: str
+    database: str
+    collection: str
+    username: Incomplete
+    password: Incomplete
+    http_protocol: str
+    verify: bool
+    key_t = str
+    url: Incomplete
+    arangodb_url: Incomplete
+    def __init__(self, url: Incomplete | None = None, *args, **kwargs) -> None: ...
+    @property
+    def connection(self): ...
+    @property
+    def db(self): ...
+    def expires_delta(self): ...
+    def get(self, key): ...
+    def set(self, key, value) -> None: ...
+    def mget(self, keys) -> Generator[Incomplete, Incomplete]: ...
+    def delete(self, key) -> None: ...
+    def cleanup(self) -> None: ...

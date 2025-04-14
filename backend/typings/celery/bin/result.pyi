@@ -1,0 +1,3 @@
+from celery.bin.base import CeleryCommand as CeleryCommand, CeleryOption as CeleryOption, handle_preload_options as handle_preload_options
+
+def result(ctx, task_id, task, traceback) -> None: ...

@@ -6,7 +6,12 @@ class DocumentSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         """Create a new instance from validated data"""
-        instance = self.Meta.model(**validated_data)
+        meta = getattr(self, 'Meta', None)
+        if meta is None or not hasattr(meta, 'model'):
+            raise NotImplementedError("Subclasses must define Meta.model")
+
+        model = meta.model
+        instance = model(**validated_data)
         instance.save()
         return instance
 

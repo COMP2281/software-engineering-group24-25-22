@@ -119,6 +119,12 @@ class ConfirmJobView(APIView):
         # Get the validated data
         valid_data = serializer.validated_data
 
+        if not isinstance(valid_data, dict):
+            return Response(
+                {"error": "Invalid data format", "details": "Expected dictionary data"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             # Get corrections from request if any
             corrections = valid_data.get("corrections", {})
@@ -188,7 +194,7 @@ class ConfirmJobView(APIView):
                             break
                         except ValueError:
                             continue
-                except Exception as e:
+                except Exception as _:
                     # Fallback to current time if date parsing fails
                     transaction_time = timezone.now()
             else:

@@ -1,0 +1,13 @@
+from celery import Task
+from celery.result import AsyncResult
+
+__all__ = ['AbortableAsyncResult', 'AbortableTask']
+
+class AbortableAsyncResult(AsyncResult):
+    def is_aborted(self): ...
+    def abort(self): ...
+
+class AbortableTask(Task):
+    abstract: bool
+    def AsyncResult(self, task_id): ...
+    def is_aborted(self, **kwargs): ...

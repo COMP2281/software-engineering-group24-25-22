@@ -81,7 +81,7 @@ class ReceiptDataSerializer(serializers.Serializer):
     subtotal_amount = serializers.DecimalField(
         max_digits=10, decimal_places=2, required=False, allow_null=True
     )
-    currency = serializers.CharField(max_length=3, required=False, default="GBP")
+    currency = serializers.CharField(max_length=3, required=False)
 
     # Cost items
     cost_items = serializers.ListField(child=CostItemSerializer(), required=False)

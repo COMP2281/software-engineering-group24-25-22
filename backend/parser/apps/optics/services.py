@@ -2,8 +2,7 @@ from typing import List, Dict, Any, Literal, Optional, Tuple
 import logging
 from datetime import timedelta
 from django.utils import timezone
-from mongoengine.queryset.visitor import Q
-from rapidfuzz import fuzz, process
+from rapidfuzz import fuzz
 import json
 
 from .models import ReceiptTemplate
@@ -135,7 +134,7 @@ class TemplateSuite:
     @staticmethod
     def find_best_merchant_match(
         receipt_text: str,
-        merchant_list: Optional[List[ReceiptTemplate]] = None,
+        merchant_list: Optional[List[str]] = None,
         threshold=70,
     ):
         """
@@ -162,6 +161,7 @@ class TemplateSuite:
 
         # Try fuzzy matching with different algorithms
         for merchant in merchant_list:
+            print(merchant)
             # Calculate multiple scores to handle different types of variations
             ratio_score = fuzz.ratio(receipt_text, merchant)
             partial_score = fuzz.partial_ratio(receipt_text, merchant)
@@ -473,7 +473,7 @@ class TemplateSuite:
         field_corrections = {}
 
         # Compare extracted vs corrected values
-        for field, value in template.field_extractors.items():
+        for field, _ in template.field_extractors.items():
             extracted = extracted_data.get(field)
             corrected = corrected_data.get(field, None)
 
@@ -834,12 +834,12 @@ class TemplateSuite:
         else:
             return {"success": False, "error": "Original template ID is required"}
 
-        if template_result == True:
+        if template_result:
             return {
                 "success": True,
                 "template_id": template_id,
                 "template_action": "updated",
-                "message": f"Original template statistics succesfully updated",
+                "message": "Original template statistics succesfully updated",
             }
         elif isinstance(template_result, ReceiptTemplate):
             return {

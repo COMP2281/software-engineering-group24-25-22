@@ -1,12 +1,7 @@
-import os
 import logging
-import tempfile
 from typing import Optional
 from PIL import Image
-from pathlib import Path
 from django.utils import timezone
-from django.conf import settings
-import json
 
 from apps.jobs.models import ProcessingJob
 from apps.jobs.utils import temp_file_path
