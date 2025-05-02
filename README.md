@@ -50,5 +50,5 @@ so you can just `pip install -r requirements.txt.` Pip will handle the duplicate
 > `nginx -c <path-to-project>/backend/parser/server/file-parser-nginx.conf -p <path-to-project>/backend/parser/server -s quit`
 
 ### Accessing the servers
-- For the General server, type `https://localhost/` in your browser or curl if you are a weirdo.
+- For the General server, type `https://localhost/` in your browser or curl if that is your preference.
 - For the File Parser server, type `https://localhost:8080/` in the browser.
